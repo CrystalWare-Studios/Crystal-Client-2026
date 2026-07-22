@@ -603,6 +603,18 @@
                         <button class="secondary" type="button" data-integration-action="save_vr_battery_settings">Save battery settings</button>
                     </div>
                 </details>
+                {% if not is_android %}
+                <details class="panel collapsible">
+                    <summary><h3>Start with SteamVR</h3></summary>
+                    <p>Registers Crystal Client with SteamVR so it launches automatically whenever SteamVR starts. Only works with the packaged .exe (not running from source), and needs SteamVR installed.</p>
+                    <dl class="status-list">
+                        <div><dt>Status</dt><dd id="steamvr_launch_status">Disabled</dd></div>
+                    </dl>
+                    <div class="button-row wrap">
+                        <button class="secondary" type="button" data-integration-action="toggle_steamvr_auto_launch">Enable/disable</button>
+                    </div>
+                </details>
+                {% endif %}
                 <details class="panel collapsible">
                     <summary><h3>{% if is_android %}Quest Media Volume{% else %}System Volume{% endif %}</h3></summary>
                     <p>{% if is_android %}Reads the media volume level directly from this Quest headset.{% else %}Reads your PC's current output volume level.{% endif %}</p>
@@ -718,10 +730,19 @@
                             <option value="smart">Smart truncate (cut cleanly, add "...")</option>
                             <option value="hard">Hard cut (cut at the exact limit)</option>
                             <option value="page">Page through it (show the whole message in turns)</option>
+                            <option value="scroll">Scroll it (slide across like a ticker sign)</option>
                             <option value="off">Don't truncate (send as-is, VRChat may cut it)</option>
                         </select>
                     </label>
                     <label class="switch-row"><input id="appearance_page_indicator" type="checkbox"> <span>Show a page counter like (1/3) when paging</span></label>
+                    <label class="field" id="appearance_scroll_speed_field" style="display:none;">
+                        <span>Scroll speed (only applies with a frame on)</span>
+                        <select id="appearance_scroll_speed">
+                            <option value="slow">Slow</option>
+                            <option value="normal">Normal</option>
+                            <option value="fast">Fast</option>
+                        </select>
+                    </label>
                     <div class="button-row"><button id="save_appearance" type="button">Save appearance</button></div>
                 </article>
             </div>

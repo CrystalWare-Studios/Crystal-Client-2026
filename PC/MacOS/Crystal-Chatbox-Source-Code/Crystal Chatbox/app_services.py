@@ -25,6 +25,9 @@ import profiles_manager
 APP_LOG_FILE = os.path.join(DATA_DIR, "app_events.jsonl")
 EXPORT_DIR = os.path.join(DATA_DIR, "exports")
 
+_MAX_LOG_BYTES = 2 * 1024 * 1024
+_TRIM_TO_BYTES = 1 * 1024 * 1024
+
 PROFILE_SETTING_KEYS = [
     key for key in DEFAULTS
     if key not in SENSITIVE_KEYS
@@ -62,6 +65,22 @@ def make_id(prefix):
     return f"{prefix}-{uuid.uuid4().hex[:10]}"
 
 
+def _trim_log_file_if_needed():
+    try:
+        if os.path.getsize(APP_LOG_FILE) <= _MAX_LOG_BYTES:
+            return
+        with open(APP_LOG_FILE, "rb") as f:
+            f.seek(-_TRIM_TO_BYTES, os.SEEK_END)
+            data = f.read()
+        newline_index = data.find(b"\n")
+        if newline_index != -1:
+            data = data[newline_index + 1:]
+        with open(APP_LOG_FILE, "wb") as f:
+            f.write(data)
+    except Exception:
+        pass
+
+
 def add_event(severity="info", component="app", message="", details=None):
     os.makedirs(DATA_DIR, exist_ok=True)
     entry = {
@@ -74,6 +93,7 @@ def add_event(severity="info", component="app", message="", details=None):
     }
     with open(APP_LOG_FILE, "a", encoding="utf-8", newline="\n") as f:
         f.write(json.dumps(entry, ensure_ascii=False, separators=(",", ":")) + "\n")
+    _trim_log_file_if_needed()
     return entry
 
 
@@ -82,19 +102,35 @@ def read_events(limit=300, severities=None, components=None):
         return []
     severities = {s.lower() for s in severities or [] if s}
     components = {s.lower() for s in components or [] if s}
+    limit = max(1, int(limit or 300))
+
+    tail_bytes = max(16384, limit * 512)
+    try:
+        with open(APP_LOG_FILE, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            truncated = size > tail_bytes
+            f.seek(max(0, size - tail_bytes))
+            raw = f.read().decode("utf-8", errors="replace")
+    except Exception:
+        raw, truncated = "", False
+
+    lines = raw.splitlines()
+    if truncated and lines:
+        lines = lines[1:]
+
     entries = []
-    with open(APP_LOG_FILE, "r", encoding="utf-8", errors="replace") as f:
-        for line in f:
-            try:
-                entry = json.loads(line)
-            except Exception:
-                continue
-            if severities and str(entry.get("severity", "")).lower() not in severities:
-                continue
-            if components and str(entry.get("component", "")).lower() not in components:
-                continue
-            entries.append(entry)
-    return entries[-max(1, int(limit or 300)):]
+    for line in lines:
+        try:
+            entry = json.loads(line)
+        except Exception:
+            continue
+        if severities and str(entry.get("severity", "")).lower() not in severities:
+            continue
+        if components and str(entry.get("component", "")).lower() not in components:
+            continue
+        entries.append(entry)
+    return entries[-limit:]
 
 
 def clear_events():

@@ -5,6 +5,9 @@ import sys
 if getattr(sys, 'frozen', False):
     BASE_DIR = os.path.dirname(sys.executable)
     DATA_DIR = os.path.join(BASE_DIR, "Crystal Chatbox Data")
+elif "ANDROID_ARGUMENT" in os.environ:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    DATA_DIR = os.environ.get("ANDROID_PRIVATE", BASE_DIR)
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     DATA_DIR = BASE_DIR

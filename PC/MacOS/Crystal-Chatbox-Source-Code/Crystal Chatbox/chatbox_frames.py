@@ -210,7 +210,7 @@ def truncate_line(line, max_width):
         return line
     if max_width <= 3:
         return safe_cut(line, max_width)
-    return safe_cut(line, max_width - 1) + "..."
+    return safe_cut(line, max_width - 3) + "..."
 
 
 def _fit_to_budget(build_fn, lines, max_width, max_total_length):
@@ -233,7 +233,7 @@ def _fit_to_budget(build_fn, lines, max_width, max_total_length):
     return safe_cut(result, max_total_length) if len(result) > max_total_length else result
 
 
-def apply_frame(text, style_id, max_total_length=DEFAULT_MAX_TOTAL_LENGTH, width=None, emoji=DEFAULT_FRAME_EMOJI):
+def apply_frame(text, style_id, max_total_length=DEFAULT_MAX_TOTAL_LENGTH, width=None, emoji=DEFAULT_FRAME_EMOJI, line_fit=None):
     if not text or not text.strip():
         return text
 
@@ -247,27 +247,33 @@ def apply_frame(text, style_id, max_total_length=DEFAULT_MAX_TOTAL_LENGTH, width
     preferred_width = min(preferred_width, 40)
 
     if style.get("emoji_mode"):
-        return apply_emoji_frame(lines, emoji, preferred_width, max_total_length)
+        return apply_emoji_frame(lines, emoji, preferred_width, max_total_length, line_fit=line_fit)
 
     if style.get("bracket_mode"):
-        return apply_bracket_frame(lines, style, preferred_width, max_total_length)
+        return apply_bracket_frame(lines, style, preferred_width, max_total_length, line_fit=line_fit)
 
     if style.get("top_only") is not None:
-        return apply_minimal_frame(lines, style, preferred_width, max_total_length)
+        return apply_minimal_frame(lines, style, preferred_width, max_total_length, line_fit=line_fit)
 
-    return apply_box_frame(lines, style, preferred_width, max_total_length)
+    return apply_box_frame(lines, style, preferred_width, max_total_length, line_fit=line_fit)
 
 
-def apply_emoji_frame(lines, emoji, width, max_total_length=DEFAULT_MAX_TOTAL_LENGTH):
+def _fit_line(line, w, line_fit=None):
+    if line_fit is not None:
+        return line_fit(line, w)
+    return truncate_line(line, w).ljust(w)
+
+
+def apply_emoji_frame(lines, emoji, width, max_total_length=DEFAULT_MAX_TOTAL_LENGTH, line_fit=None):
     emoji = (emoji or DEFAULT_FRAME_EMOJI).strip() or DEFAULT_FRAME_EMOJI
 
     def build(w, line_list):
-        return '\n'.join(f"{emoji} {truncate_line(line, w)} {emoji}" for line in line_list)
+        return '\n'.join(f"{emoji} {_fit_line(line, w, line_fit)} {emoji}" for line in line_list)
 
     return _fit_to_budget(build, lines, width, max_total_length)
 
 
-def apply_box_frame(lines, style, width, max_total_length=DEFAULT_MAX_TOTAL_LENGTH):
+def apply_box_frame(lines, style, width, max_total_length=DEFAULT_MAX_TOTAL_LENGTH, line_fit=None):
     tl, tr = style["top_left"], style["top_right"]
     bl, br = style["bottom_left"], style["bottom_right"]
     h, v = style["horizontal"], style["vertical"]
@@ -279,8 +285,7 @@ def apply_box_frame(lines, style, width, max_total_length=DEFAULT_MAX_TOTAL_LENG
         bottom_line = bl + (h * inner_width) + br
         body = []
         for line in line_list:
-            truncated = truncate_line(line, w)
-            padded = truncated.ljust(w)
+            padded = _fit_line(line, w, line_fit)
             if padding:
                 body.append(f"{v} {padded} {v}")
             else:
@@ -290,13 +295,13 @@ def apply_box_frame(lines, style, width, max_total_length=DEFAULT_MAX_TOTAL_LENG
     return _fit_to_budget(build, lines, width, max_total_length)
 
 
-def apply_minimal_frame(lines, style, width, max_total_length=DEFAULT_MAX_TOTAL_LENGTH):
+def apply_minimal_frame(lines, style, width, max_total_length=DEFAULT_MAX_TOTAL_LENGTH, line_fit=None):
     h = style["horizontal"]
     top_only = style.get("top_only", False)
 
     def build(w, line_list):
         line_str = h * (w + 4)
-        parts = [line_str] + [f"  {truncate_line(line, w)}  " for line in line_list]
+        parts = [line_str] + [f"  {_fit_line(line, w, line_fit)}  " for line in line_list]
         if not top_only:
             parts.append(line_str)
         return '\n'.join(parts)
@@ -304,11 +309,11 @@ def apply_minimal_frame(lines, style, width, max_total_length=DEFAULT_MAX_TOTAL_
     return _fit_to_budget(build, lines, width, max_total_length)
 
 
-def apply_bracket_frame(lines, style, width=40, max_total_length=DEFAULT_MAX_TOTAL_LENGTH):
+def apply_bracket_frame(lines, style, width=40, max_total_length=DEFAULT_MAX_TOTAL_LENGTH, line_fit=None):
     tl, tr = style["top_left"], style["top_right"]
 
     def build(w, line_list):
-        return '\n'.join(f"{tl}{truncate_line(line, w)}{tr}" for line in line_list)
+        return '\n'.join(f"{tl}{_fit_line(line, w, line_fit)}{tr}" for line in line_list)
 
     return _fit_to_budget(build, lines, width, max_total_length)
 

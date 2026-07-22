@@ -94,7 +94,10 @@ def _handle_avatar_change(address, *args):
     global _last_avatar_id
     avatar_id = str(args[0]) if args else ""
     with _lock:
+        previous_avatar_id = _last_avatar_id
         _last_avatar_id = avatar_id
+    if avatar_id and avatar_id == previous_avatar_id:
+        return
     if SETTINGS.get("avatar_change_announce_enabled", False):
         _fire_reaction(SETTINGS.get("avatar_change_message", "Just switched avatars! ✨"))
 

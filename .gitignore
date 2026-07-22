@@ -26,6 +26,7 @@ app_events.jsonl
 backups/
 exports/
 *.log
+crash_log.txt
 .cache/
 .spotify_cache
 .spotify_caches/

@@ -59,6 +59,26 @@
     const $ = (id) => document.getElementById(id);
     const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
+    const _pendingEdits = new Map();
+
+    function markPendingEdit(id) {
+        _pendingEdits.set(id, Date.now());
+    }
+
+    function isPendingEdit(id) {
+        const t = _pendingEdits.get(id);
+        if (!t) return false;
+        if (Date.now() - t > 15000) {
+            _pendingEdits.delete(id);
+            return false;
+        }
+        return true;
+    }
+
+    function clearPendingEdit(id) {
+        _pendingEdits.delete(id);
+    }
+
     document.addEventListener("DOMContentLoaded", init);
 
     function init() {
@@ -629,11 +649,25 @@
                 chatbox_frame: $("appearance_frame").value,
                 chatbox_frame_emoji: $("appearance_frame_emoji") ? ($("appearance_frame_emoji").value.trim() || "✨") : "✨",
                 chatbox_overflow_mode: $("appearance_overflow_mode") ? $("appearance_overflow_mode").value : "smart",
+                chatbox_scroll_speed: $("appearance_scroll_speed") ? $("appearance_scroll_speed").value : "normal",
                 chatbox_page_indicator: $("appearance_page_indicator") ? $("appearance_page_indicator").checked : true
             }, "Appearance saved.");
+            clearPendingEdit("appearance_effect");
+            clearPendingEdit("appearance_frame");
+            clearPendingEdit("appearance_overflow_mode");
+            clearPendingEdit("appearance_scroll_speed");
         });
+        if ($("appearance_effect")) {
+            $("appearance_effect").addEventListener("change", () => markPendingEdit("appearance_effect"));
+        }
         if ($("appearance_frame")) {
-            $("appearance_frame").addEventListener("change", () => { updateFrameEmojiVisibility(); refreshFramePreview(); });
+            $("appearance_frame").addEventListener("change", () => { markPendingEdit("appearance_frame"); updateFrameEmojiVisibility(); refreshFramePreview(); });
+        }
+        if ($("appearance_overflow_mode")) {
+            $("appearance_overflow_mode").addEventListener("change", () => { markPendingEdit("appearance_overflow_mode"); updateScrollSpeedVisibility(); });
+        }
+        if ($("appearance_scroll_speed")) {
+            $("appearance_scroll_speed").addEventListener("change", () => markPendingEdit("appearance_scroll_speed"));
         }
         if ($("appearance_frame_emoji")) {
             $("appearance_frame_emoji").addEventListener("input", refreshFramePreview);
@@ -643,6 +677,11 @@
     function updateFrameEmojiVisibility() {
         const field = $("appearance_frame_emoji_field");
         if (field) field.style.display = ($("appearance_frame") && $("appearance_frame").value === "emoji") ? "" : "none";
+    }
+
+    function updateScrollSpeedVisibility() {
+        const field = $("appearance_scroll_speed_field");
+        if (field) field.style.display = ($("appearance_overflow_mode") && $("appearance_overflow_mode").value === "scroll") ? "" : "none";
     }
 
     function bindProfiles() {
@@ -1872,6 +1911,7 @@
         const account = integrations.vrchat_account || {};
         const live = integrations.vrchat_live || {};
         const battery = integrations.vr_battery || {};
+        const steamvrLaunch = integrations.steamvr_launch || {};
         const volume = integrations.volume || {};
         const deviceStatus = integrations.device_status || {};
         const oscReactions = integrations.osc_reactions || {};
@@ -1906,6 +1946,7 @@
         }
         announceVrchatEvents(live.events || []);
         renderVrBatteryPanel(battery, settings);
+        renderSteamVrLaunchPanel(steamvrLaunch);
         renderVolumePanel(volume, settings);
         renderDeviceStoragePanel(deviceStatus, settings);
         renderOscReactionsPanel(oscReactions, settings);
@@ -2032,6 +2073,27 @@
         }
     }
 
+    function renderSteamVrLaunchPanel(steamvrLaunch) {
+        const status = $("steamvr_launch_status");
+        if (!status) return;
+        if (!steamvrLaunch.supported) {
+            setText("steamvr_launch_status", "Not available (needs the packaged .exe with SteamVR installed)");
+        } else if (steamvrLaunch.enabled) {
+            setText("steamvr_launch_status", steamvrLaunch.registered ? "Enabled - registered with SteamVR" : "Enabled - not yet confirmed, start SteamVR once to register");
+        } else {
+            setText("steamvr_launch_status", "Disabled");
+        }
+    }
+
+    async function toggleSteamVrAutoLaunch() {
+        try {
+            const result = await api("/steamvr/toggle-auto-launch", { method: "POST" });
+            toast(result.enabled ? "Crystal Client will now start with SteamVR." : "SteamVR auto-launch disabled.", "success");
+        } catch (error) {
+            toast(error.message, "error");
+        }
+    }
+
     function renderVolumePanel(volume, settings) {
         const status = $("volume_status");
         if (!status) return;
@@ -2121,6 +2183,7 @@
             if (action === "toggle_vr_battery") await api("/vr-battery/toggle", { method: "POST" });
             if (action === "refresh_vr_battery") await api("/vr-battery/refresh", { method: "POST" });
             if (action === "save_vr_battery_settings") await saveVrBatterySettings();
+            if (action === "toggle_steamvr_auto_launch") await toggleSteamVrAutoLaunch();
             if (action === "toggle_volume") await api("/volume/toggle", { method: "POST" });
             if (action === "refresh_volume") await api("/volume/refresh", { method: "POST" });
             if (action === "save_volume_settings") await saveVolumeSettings();
@@ -2481,19 +2544,23 @@
         setValue("setting_quest_port", settings.quest_port || 9000);
         setValue("setting_osc_interval", settings.osc_send_interval || 3);
         setValue("setting_typed_duration", settings.typed_message_duration || 5);
-        if ($("appearance_effect") && $("appearance_effect").options.length && document.activeElement !== $("appearance_effect")) {
+        if ($("appearance_effect") && $("appearance_effect").options.length && document.activeElement !== $("appearance_effect") && !isPendingEdit("appearance_effect")) {
             $("appearance_effect").value = settings.text_effect || "none";
         }
-        if ($("appearance_frame") && $("appearance_frame").options.length && document.activeElement !== $("appearance_frame")) {
+        if ($("appearance_frame") && $("appearance_frame").options.length && document.activeElement !== $("appearance_frame") && !isPendingEdit("appearance_frame")) {
             $("appearance_frame").value = settings.chatbox_frame || "none";
         }
         if ($("appearance_frame_emoji") && document.activeElement !== $("appearance_frame_emoji")) {
             $("appearance_frame_emoji").value = settings.chatbox_frame_emoji || "✨";
         }
         updateFrameEmojiVisibility();
-        if ($("appearance_overflow_mode") && document.activeElement !== $("appearance_overflow_mode")) {
+        if ($("appearance_overflow_mode") && document.activeElement !== $("appearance_overflow_mode") && !isPendingEdit("appearance_overflow_mode")) {
             $("appearance_overflow_mode").value = settings.chatbox_overflow_mode || "smart";
         }
+        if ($("appearance_scroll_speed") && document.activeElement !== $("appearance_scroll_speed") && !isPendingEdit("appearance_scroll_speed")) {
+            $("appearance_scroll_speed").value = settings.chatbox_scroll_speed || "normal";
+        }
+        updateScrollSpeedVisibility();
         if ($("appearance_page_indicator")) {
             $("appearance_page_indicator").checked = settings.chatbox_page_indicator !== false;
         }

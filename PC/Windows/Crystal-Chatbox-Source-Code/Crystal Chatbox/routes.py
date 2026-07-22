@@ -5,6 +5,7 @@ import os
 import sys
 import random
 import logging
+import logging.handlers
 import signal
 import socket
 import subprocess
@@ -40,6 +41,7 @@ import message_history
 import vrchat_service
 import vrchat_live
 import vr_battery
+import steamvr_launch
 import volume_monitor
 import device_status
 import soundpad
@@ -60,6 +62,10 @@ if getattr(sys, 'frozen', False):
 
     BASE_DIR = os.path.dirname(sys.executable)
     DATA_DIR = os.path.join(BASE_DIR, "Crystal Chatbox Data")
+elif "ANDROID_ARGUMENT" in os.environ:
+
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    DATA_DIR = os.environ.get("ANDROID_PRIVATE", BASE_DIR)
 else:
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -70,11 +76,12 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 ERROR_LOG_FILE = os.path.join(DATA_DIR, "vrchat_errors.log")
 
-logging.basicConfig(
-    filename=ERROR_LOG_FILE,
-    level=logging.ERROR,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+_error_log_handler = logging.handlers.RotatingFileHandler(
+    ERROR_LOG_FILE, maxBytes=1 * 1024 * 1024, backupCount=1, encoding="utf-8"
 )
+_error_log_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+logging.getLogger().addHandler(_error_log_handler)
+logging.getLogger().setLevel(logging.ERROR)
 
 chatbox_visible = SETTINGS.get("chatbox_visible", False)
 show_time = SETTINGS.get("show_time", True)
@@ -371,7 +378,7 @@ def _save_chatbox_template_settings(data):
         blank_line_mode = "hide"
 
     overflow_mode = str(data.get("overflow_mode", SETTINGS.get("chatbox_overflow_mode", "smart"))).strip()
-    if overflow_mode not in {"smart", "hard", "off", "page"}:
+    if overflow_mode not in {"smart", "hard", "off", "page", "scroll"}:
         overflow_mode = "smart"
 
     SETTINGS.update({
@@ -461,6 +468,36 @@ def _get_paged_chunk(pages, content_key, advance_page):
     return pages[index]
 
 
+_marquee_offsets = {}
+MARQUEE_SEPARATOR = "     "
+_MARQUEE_STATE_LIMIT = 64
+
+
+def _get_marquee_window(text, width, advance_page, content_key=None):
+    text = " ".join(text.split("\n")).strip()
+    if not text or width <= 0:
+        return text
+    if len(text) <= width:
+        return text
+
+    loop_text = text + MARQUEE_SEPARATOR
+    total_len = len(loop_text)
+    identity = content_key if content_key is not None else text
+    state_key = f"marquee:{identity}"
+
+    offset = _marquee_offsets.get(state_key, 0) % total_len
+    doubled = loop_text + loop_text
+    window = chatbox_frames.safe_cut(doubled[offset:], width)
+
+    if advance_page:
+        step = max(2, width // 4)
+        _marquee_offsets[state_key] = (offset + step) % total_len
+        if len(_marquee_offsets) > _MARQUEE_STATE_LIMIT:
+            _marquee_offsets.pop(next(iter(_marquee_offsets)))
+
+    return window
+
+
 def _apply_chatbox_overflow(message, advance_page=False, content_key=None):
     mode = SETTINGS.get("chatbox_overflow_mode", "smart")
     if mode == "off":
@@ -476,6 +513,16 @@ def _apply_chatbox_overflow(message, advance_page=False, content_key=None):
         return chatbox_frames.safe_cut(message, max_len)
     if mode == "page":
         return _get_paged_message(message, max_len, advance_page, content_key=content_key)
+    if mode == "scroll":
+        lines = message.split("\n")
+        if len(lines) == 1:
+            return _get_marquee_window(message, max_len, advance_page, content_key=content_key)
+        result_lines = []
+        for index, line in enumerate(lines):
+            window = _get_marquee_window(line, max_len, advance_page, content_key=f"row:{index}")
+            result_lines.append(window)
+        combined = "\n".join(result_lines)
+        return combined if len(combined) <= max_len else smart_truncate_message(combined)
     return smart_truncate_message(message)
 
 
@@ -700,6 +747,15 @@ def _get_vrchat_live_state(force_refresh=False):
         state = vrchat_live.get_state()
 
     return _public_vrchat_live_state(state)
+
+
+def _get_steamvr_launch_state():
+    supported = steamvr_launch.is_supported()
+    return {
+        "supported": supported,
+        "enabled": bool(SETTINGS.get("steamvr_auto_launch_enabled", False)),
+        "registered": steamvr_launch.is_registered() if supported else False,
+    }
 
 
 def _build_vrchat_live_values(state=None):
@@ -1109,6 +1165,50 @@ def get_current_preview(advance_page=False):
             result = chatbox_frames.safe_cut(result, max_len)
         return result
 
+    if overflow_mode == "scroll" and frame_style != "none":
+        try:
+            width, _lines = chatbox_frames.plan_frame_capacity(frame_style, max_len, emoji=frame_emoji)
+
+            custom_marquee_source = None
+            if show_custom and custom_line:
+                all_custom = [t for t in CUSTOM_TEXTS if t and t.strip()]
+                if len(all_custom) > 1:
+                    joined = "     •     ".join(replace_variables(t) for t in all_custom)
+                    custom_marquee_source = f"{custom_emoji} {joined}" if show_icons and custom_emoji else joined
+
+            line_roles = {}
+            for role, value in template_values.items():
+                if value:
+                    line_roles[value] = role
+            if custom_line:
+                line_roles[custom_line] = "custom"
+            if progress_line:
+                line_roles[progress_line] = "progress"
+
+            advanced_lines = set()
+            line_positions = {}
+
+            def line_fit(line, w):
+                source = custom_marquee_source if (custom_marquee_source and line == custom_line) else line
+                if line in line_roles:
+                    slot_key = line_roles[line]
+                else:
+                    if line not in line_positions:
+                        line_positions[line] = len(line_positions)
+                    slot_key = f"pos:{line_positions[line]}"
+                should_advance = advance_page and slot_key not in advanced_lines
+                window = _get_marquee_window(source, w, should_advance, content_key=f"role:{slot_key}")
+                if should_advance:
+                    advanced_lines.add(slot_key)
+                return window.center(w)
+
+            result = chatbox_frames.apply_frame(result, frame_style, max_total_length=max_len, emoji=frame_emoji, line_fit=line_fit)
+            return result
+        except Exception as e:
+            log_error(f"Failed to apply scrolling frame style '{frame_style}'", e)
+            result = chatbox_frames.safe_cut(result, max_len)
+            return result
+
     if frame_style and frame_style != "none":
         try:
             result = chatbox_frames.apply_frame(result, frame_style, max_total_length=max_len, emoji=frame_emoji)
@@ -1311,6 +1411,42 @@ def format_typed_message(text):
     return result
 
 
+SCROLL_SPEED_INTERVALS = {"slow": 2.0, "normal": 1.0, "fast": 0.5}
+
+
+def _scroll_is_active():
+    return (
+        SETTINGS.get("chatbox_overflow_mode", "smart") == "scroll"
+        and SETTINGS.get("chatbox_frame", "none") != "none"
+    )
+
+
+def start_scroll_ticker():
+    def ticker():
+        print("[Scroll Ticker] Thread started")
+        while True:
+            try:
+                if not _scroll_is_active():
+                    time.sleep(1)
+                    continue
+                if not chatbox_visible or auto_send_paused:
+                    time.sleep(1)
+                    continue
+
+                speed = SETTINGS.get("chatbox_scroll_speed", "normal")
+                interval = SCROLL_SPEED_INTERVALS.get(speed, 1.0)
+
+                preview_msg = get_current_preview(advance_page=True)
+                if preview_msg:
+                    send_to_vrchat(preview_msg)
+                time.sleep(interval)
+            except Exception as e:
+                log_error("Scroll ticker error", e)
+                time.sleep(1)
+
+    threading.Thread(target=ticker, daemon=True).start()
+
+
 def start_vrc_updater():
     def updater():
         global current_time_text, current_custom_text, last_message_sent
@@ -1423,20 +1559,27 @@ def start_vrc_updater():
                         osc_interval = max(1, int(SETTINGS.get("osc_send_interval", 3)))
                         next_osc_send = osc_interval
 
-                    preview_msg = get_current_preview(advance_page=True)
-
-                    if chatbox_visible and not auto_send_paused and preview_msg:
-                        send_to_vrchat(preview_msg)
-                    elif chatbox_visible:
-                        try:
-                            client.send_message("/chatbox/visible", 1)
-                        except:
-                            pass
+                    if _scroll_is_active():
+                        if not chatbox_visible:
+                            try:
+                                client.send_message("/chatbox/visible", 0)
+                            except:
+                                pass
                     else:
-                        try:
-                            client.send_message("/chatbox/visible", 0)
-                        except:
-                            pass
+                        preview_msg = get_current_preview(advance_page=True)
+
+                        if chatbox_visible and not auto_send_paused and preview_msg:
+                            send_to_vrchat(preview_msg)
+                        elif chatbox_visible:
+                            try:
+                                client.send_message("/chatbox/visible", 1)
+                            except:
+                                pass
+                        else:
+                            try:
+                                client.send_message("/chatbox/visible", 0)
+                            except:
+                                pass
 
             except Exception as e:
                 log_error("VRC Updater error", e)
@@ -1471,7 +1614,7 @@ def create_app():
     vrchat_live.start_tracker(
         enabled=SETTINGS.get("vrchat_live_enabled", True),
         log_dir=SETTINGS.get("vrchat_live_log_dir", ""),
-        interval=0.5
+        interval=5.0 if IS_ANDROID else 0.5
     )
 
     vr_battery.start_tracker(
@@ -1505,6 +1648,13 @@ def create_app():
     global_hotkeys.configure(SETTINGS.get("global_hotkeys_enabled", False), SETTINGS.get("global_hotkeys", []))
 
     start_vrc_updater()
+    start_scroll_ticker()
+
+    if SETTINGS.get("steamvr_auto_launch_enabled", False):
+        try:
+            steamvr_launch.register(auto_launch=True)
+        except Exception as e:
+            log_error("Failed to refresh SteamVR auto-launch registration", e)
 
     @app.route("/")
     def index():
@@ -1785,6 +1935,7 @@ def create_app():
             "vrchat_account": vrchat_service.status(),
             "vrchat_live": _get_vrchat_live_state(),
             "vr_battery": vr_battery.get_state(),
+            "steamvr_launch": _get_steamvr_launch_state(),
             "volume": volume_monitor.get_state(),
             "device_status": device_status.get_state(),
             "osc_reactions": osc_reactions.get_status(),
@@ -1842,6 +1993,13 @@ def create_app():
         patch = data.get("settings", data)
         if not isinstance(patch, dict):
             return _json_error("Settings payload must be an object.")
+        if (
+            patch.get("chatbox_frame", "none") != "none"
+            and SETTINGS.get("chatbox_frame", "none") == "none"
+            and "chatbox_overflow_mode" not in patch
+            and SETTINGS.get("chatbox_overflow_mode", "smart") == "smart"
+        ):
+            patch["chatbox_overflow_mode"] = "scroll"
         errors = {}
         if "quest_ip" in patch or "quest_port" in patch:
             ip, port, osc_errors = app_services.validate_osc(
@@ -2188,6 +2346,29 @@ def create_app():
             pass
         _persist_settings(label="vr_battery_settings")
         return jsonify({"ok": True, "state": vr_battery.get_state()}), 200
+
+    @app.route("/steamvr/state", methods=["GET"])
+    def steamvr_state():
+        return jsonify({"ok": True, **_get_steamvr_launch_state()}), 200
+
+    @app.route("/steamvr/toggle-auto-launch", methods=["POST"])
+    def steamvr_toggle_auto_launch():
+        enabled = not bool(SETTINGS.get("steamvr_auto_launch_enabled", False))
+        error = ""
+        try:
+            if enabled:
+                steamvr_launch.register(auto_launch=True)
+            else:
+                steamvr_launch.unregister()
+        except Exception as e:
+            reason = str(e).strip() or type(e).__name__
+            error = f"Could not reach SteamVR ({reason}). Start SteamVR once, then try again."
+            enabled = SETTINGS.get("steamvr_auto_launch_enabled", False)
+        else:
+            SETTINGS["steamvr_auto_launch_enabled"] = enabled
+            _persist_settings(label="steamvr_auto_launch")
+        registered = steamvr_launch.is_registered() if steamvr_launch.is_supported() else False
+        return jsonify({"ok": not error, "enabled": enabled, "error": error, "registered": registered}), (200 if not error else 400)
 
     @app.route("/volume/state", methods=["GET"])
     def volume_state():

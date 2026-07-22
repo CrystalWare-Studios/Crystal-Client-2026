@@ -11,6 +11,9 @@ from datetime import datetime
 if getattr(sys, "frozen", False):
     BASE_DIR = os.path.dirname(sys.executable)
     DATA_DIR = os.path.join(BASE_DIR, "Crystal Chatbox Data")
+elif "ANDROID_ARGUMENT" in os.environ:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    DATA_DIR = os.environ.get("ANDROID_PRIVATE", BASE_DIR)
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     DATA_DIR = BASE_DIR
@@ -128,6 +131,7 @@ DEFAULTS = {
     "vrchat_live_template": "{world} ({player_count}/{capacity}) | {instance} | {last_event}",
     "vr_battery_enabled": False,
     "vr_battery_interval": 20,
+    "steamvr_auto_launch_enabled": False,
     "show_vr_battery": False,
     "vr_battery_include_controllers": True,
     "vr_battery_include_trackers": False,
@@ -151,6 +155,7 @@ DEFAULTS = {
     "chatbox_separator": "\n",
     "chatbox_blank_line_mode": "hide",
     "chatbox_overflow_mode": "page",
+    "chatbox_scroll_speed": "normal",
     "chatbox_page_indicator": True,
     "typed_message_duration": 5,
     "typing_indicator_enabled": True,
@@ -438,8 +443,10 @@ def migrate_settings(data):
     migrated["tts_rate"] = _coerce_float(migrated.get("tts_rate"), 1.0, 0.5, 2.0)
     migrated["tts_pitch"] = _coerce_float(migrated.get("tts_pitch"), 1.0, 0.5, 2.0)
     migrated["tts_volume"] = _coerce_float(migrated.get("tts_volume"), 1.0, 0.0, 1.0)
-    if migrated.get("chatbox_overflow_mode") not in {"smart", "hard", "off", "page"}:
+    if migrated.get("chatbox_overflow_mode") not in {"smart", "hard", "off", "page", "scroll"}:
         migrated["chatbox_overflow_mode"] = "smart"
+    if migrated.get("chatbox_scroll_speed") not in {"slow", "normal", "fast"}:
+        migrated["chatbox_scroll_speed"] = "normal"
     if migrated.get("theme") not in {"dark", "light"}:
         migrated["theme"] = "dark"
     migrated["custom_texts"] = [str(v)[:500] for v in (migrated.get("custom_texts") or DEFAULTS["custom_texts"])]

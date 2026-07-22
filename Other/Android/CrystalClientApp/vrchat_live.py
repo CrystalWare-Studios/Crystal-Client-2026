@@ -6,6 +6,8 @@ from collections import deque
 from copy import deepcopy
 from datetime import datetime
 
+IS_ANDROID = "ANDROID_ARGUMENT" in os.environ
+
 try:
     import psutil
 except Exception:
@@ -246,7 +248,9 @@ def _scan_once():
                 _state["updated_at"] = _now_iso()
                 return
             _state["status"] = "waiting"
-            if candidate_count:
+            if IS_ANDROID:
+                _state["last_error"] = "Quest can't read VRChat's log file directly. Log in to your VRChat account under Integrations to show your current world here."
+            elif candidate_count:
                 _state["last_error"] = f"Found {candidate_count} VRChat log file(s), but none contain readable data yet. Open or rejoin a VRChat world so VRChat writes to the log."
             else:
                 _state["last_error"] = f"No VRChat output logs found in {log_dir}. Start PC VRChat once, then refresh."

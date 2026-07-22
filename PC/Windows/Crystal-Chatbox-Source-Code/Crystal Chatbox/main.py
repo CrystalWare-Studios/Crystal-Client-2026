@@ -1,6 +1,51 @@
 import sys
 import os
 
+
+def _crash_log_path():
+    try:
+        base_dir = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
+        data_dir = os.path.join(base_dir, "Crystal Chatbox Data") if getattr(sys, "frozen", False) else base_dir
+        os.makedirs(data_dir, exist_ok=True)
+        return os.path.join(data_dir, "crash_log.txt")
+    except Exception:
+        return os.path.join(os.path.expanduser("~"), "crystal_client_crash_log.txt")
+
+
+def _report_crash(exc_type, exc_value, exc_tb):
+    import traceback
+    from datetime import datetime
+    message = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+    path = ""
+    try:
+        path = _crash_log_path()
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(f"\n--- Crash at {datetime.now().isoformat()} ---\n{message}\n")
+    except Exception:
+        path = ""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            short = f"{exc_type.__name__}: {exc_value}"
+            detail = "Crystal Client hit an unexpected error and needs to close.\n\n" + short
+            if path:
+                detail += f"\n\nDetails saved to:\n{path}"
+            ctypes.windll.user32.MessageBoxW(0, detail, "Crystal Client - Unexpected Error", 0x10)
+        except Exception:
+            pass
+
+
+def _report_thread_crash(args):
+    _report_crash(args.exc_type, args.exc_value, args.exc_traceback)
+
+
+sys.excepthook = _report_crash
+try:
+    import threading
+    threading.excepthook = _report_thread_crash
+except Exception:
+    pass
+
 if getattr(sys, 'frozen', False) and sys.platform == 'win32':
 
 
@@ -71,6 +116,22 @@ class DownloadAPI:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
+    def download_crash_log(self):
+        try:
+            log_file = _crash_log_path()
+            if not os.path.exists(log_file):
+                return {"success": False, "error": "No crash log found"}
+
+            downloads_path = os.path.expanduser("~/Downloads")
+            from datetime import datetime
+            filename = f"crystal_client_crash_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+            dest_path = os.path.join(downloads_path, filename)
+
+            shutil.copy2(log_file, dest_path)
+            return {"success": True, "path": dest_path, "filename": filename}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
     def download_log(self):
         try:
             log_file = os.path.join(os.path.dirname(__file__), "vrchat_errors.log")
@@ -138,4 +199,8 @@ def main():
         start_gui(flask_app, port=port)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        _report_crash(*sys.exc_info())
+        raise
