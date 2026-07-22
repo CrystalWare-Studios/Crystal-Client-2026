@@ -167,6 +167,28 @@ def _tracker_loop_windows(interval):
         time.sleep(interval)
 
 
+_lastfm_track_state = {"key": None, "started_at": 0.0, "duration": 0}
+
+
+def _lastfm_track_duration(artist, title):
+    try:
+        response = requests.get(
+            LASTFM_API_URL,
+            params={
+                "method": "track.getInfo",
+                "artist": artist,
+                "track": title,
+                "api_key": LASTFM_API_KEY,
+                "format": "json",
+            },
+            timeout=15,
+        )
+        payload = response.json()
+        return int(payload.get("track", {}).get("duration", 0) or 0) // 1000
+    except Exception:
+        return 0
+
+
 def _read_lastfm_now_playing():
     username = SETTINGS.get("lastfm_username", "").strip()
     if not username:
@@ -190,10 +212,12 @@ def _read_lastfm_now_playing():
 
     tracks = payload.get("recenttracks", {}).get("track", [])
     if not tracks:
+        _lastfm_track_state["key"] = None
         return None
 
     track = tracks[0]
     if not track.get("@attr", {}).get("nowplaying"):
+        _lastfm_track_state["key"] = None
         return None
 
     title = track.get("name", "")
@@ -203,10 +227,21 @@ def _read_lastfm_now_playing():
         if image.get("size") == "extralarge" and image.get("#text"):
             album_art = image["#text"]
 
+    key = (artist, title)
+    if _lastfm_track_state["key"] != key:
+        _lastfm_track_state["key"] = key
+        _lastfm_track_state["started_at"] = time.time()
+        _lastfm_track_state["duration"] = _lastfm_track_duration(artist, title)
+
+    duration = _lastfm_track_state["duration"]
+    position = int(time.time() - _lastfm_track_state["started_at"])
+    if duration > 0:
+        position = min(position, duration)
+
     return {
         "song_text": f"{title} - {artist}".strip(" -"),
-        "song_pos": 0,
-        "song_dur": 0,
+        "song_pos": position,
+        "song_dur": duration,
         "album_art": album_art,
     }
 

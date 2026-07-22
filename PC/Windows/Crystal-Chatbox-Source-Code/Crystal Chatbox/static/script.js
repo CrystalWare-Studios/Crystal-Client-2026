@@ -2635,8 +2635,8 @@
     function spotifyHelpText(spotify) {
         const source = spotify && spotify.source;
         if (source === "windows_media") return "Reads whatever's playing from Windows Media - no setup needed.";
-        if (source === "lastfm") return "Reads whatever's scrobbling on Last.fm - enter your username under Now Playing Setup.";
-        return "Requires your own free Spotify app (Client ID/Secret) from developer.spotify.com.";
+        if (source === "lastfm") return "Scroll down to Spotify/Music Integration to enter your Last.fm username.";
+        return "Scroll down to Spotify/Music Integration to connect your own free Spotify app.";
     }
 
     function spotifyCardActions(spotify) {

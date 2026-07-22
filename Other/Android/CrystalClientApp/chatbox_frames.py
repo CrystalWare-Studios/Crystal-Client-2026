@@ -1,7 +1,19 @@
 
 import textwrap
+import unicodedata
 
 DEFAULT_MAX_TOTAL_LENGTH = 144
+
+_UNSAFE_TRAILING_CODEPOINTS = {"‍", "️"}
+
+
+def safe_cut(text, length):
+    if length <= 0:
+        return ""
+    cut = text[:length]
+    while cut and (unicodedata.combining(cut[-1]) or cut[-1] in _UNSAFE_TRAILING_CODEPOINTS):
+        cut = cut[:-1]
+    return cut
 
 FRAME_STYLES = {
     "none": {
@@ -197,8 +209,8 @@ def truncate_line(line, max_width):
     if len(line) <= max_width:
         return line
     if max_width <= 3:
-        return line[:max_width]
-    return line[:max_width - 1] + "..."
+        return safe_cut(line, max_width)
+    return safe_cut(line, max_width - 1) + "..."
 
 
 def _fit_to_budget(build_fn, lines, max_width, max_total_length):
@@ -218,7 +230,7 @@ def _fit_to_budget(build_fn, lines, max_width, max_total_length):
                 return result
 
     result = build_fn(1, line_list[:1])
-    return result[:max_total_length] if len(result) > max_total_length else result
+    return safe_cut(result, max_total_length) if len(result) > max_total_length else result
 
 
 def apply_frame(text, style_id, max_total_length=DEFAULT_MAX_TOTAL_LENGTH, width=None, emoji=DEFAULT_FRAME_EMOJI):
@@ -228,7 +240,7 @@ def apply_frame(text, style_id, max_total_length=DEFAULT_MAX_TOTAL_LENGTH, width
     style = FRAME_STYLES.get(style_id, FRAME_STYLES["none"])
 
     if style_id == "none":
-        return text[:max_total_length]
+        return safe_cut(text, max_total_length)
 
     lines = text.split('\n')
     preferred_width = width if width is not None else get_longest_line_length(text)
@@ -394,13 +406,11 @@ def paginate_text(text, max_total_length=DEFAULT_MAX_TOTAL_LENGTH):
 
     for line in text.split('\n'):
         while len(line) > max_total_length:
-
-
             flush()
             cut = line.rfind(' ', 0, max_total_length)
             if cut <= 0:
                 cut = max_total_length
-            pages.append(line[:cut].rstrip())
+            pages.append(safe_cut(line, cut).rstrip())
             line = line[cut:].lstrip()
 
         candidate = f"{current}\n{line}" if current else line

@@ -25,7 +25,7 @@ android.minapi = 26
 android.ndk_api = 26
 android.archs = arm64-v8a
 android.release_artifact = apk
-android.numeric_version = 102610003
+android.numeric_version = 102610004
 
 android.allow_backup = True
 

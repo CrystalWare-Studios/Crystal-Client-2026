@@ -473,7 +473,7 @@ def _apply_chatbox_overflow(message, advance_page=False, content_key=None):
     if not message or len(message) <= max_len:
         return message
     if mode == "hard":
-        return message[:max_len]
+        return chatbox_frames.safe_cut(message, max_len)
     if mode == "page":
         return _get_paged_message(message, max_len, advance_page, content_key=content_key)
     return smart_truncate_message(message)
@@ -870,13 +870,16 @@ def get_current_preview(advance_page=False):
     if show_music and sstate.get("song_text"):
         pos = int(sstate.get("song_pos", 0))
         dur = int(sstate.get("song_dur", 0))
-        elapsed_min, elapsed_sec = divmod(pos, 60)
-        total_min, total_sec = divmod(dur, 60)
         show_icons = SETTINGS.get("show_module_icons", True)
         song_emoji = SETTINGS.get("song_emoji", "🎶")
         icon = f"{song_emoji} " if show_icons and song_emoji else ""
-        song_line = f"{icon}{sstate['song_text']} [{elapsed_min}:{elapsed_sec:02d} / {total_min}:{total_sec:02d}]"
-        if SETTINGS.get("music_progress", True):
+        if dur > 0:
+            elapsed_min, elapsed_sec = divmod(pos, 60)
+            total_min, total_sec = divmod(dur, 60)
+            song_line = f"{icon}{sstate['song_text']} [{elapsed_min}:{elapsed_sec:02d} / {total_min}:{total_sec:02d}]"
+        else:
+            song_line = f"{icon}{sstate['song_text']}"
+        if SETTINGS.get("music_progress", True) and dur > 0:
             style = SETTINGS.get("progress_style", "bar")
             progress_percent = int((pos / dur) * 100) if dur > 0 else 0
             if style == "bar":
@@ -1103,7 +1106,7 @@ def get_current_preview(advance_page=False):
             result = chatbox_frames.apply_frame(page_text, frame_style, max_total_length=max_len, emoji=frame_emoji)
         except Exception as e:
             log_error(f"Failed to apply paged frame style '{frame_style}'", e)
-            result = result[:max_len]
+            result = chatbox_frames.safe_cut(result, max_len)
         return result
 
     if frame_style and frame_style != "none":
@@ -1133,29 +1136,29 @@ def smart_truncate_message(message):
     lines = message.split('\n')
     
     if len(lines) == 1:
-        return message[:max_len-3] + "..."
-    
+        return chatbox_frames.safe_cut(message, max_len - 3) + "..."
+
     result_lines = []
     current_length = 0
-    
+
     for i, line in enumerate(lines):
         line_with_newline = line if i == 0 else '\n' + line
         new_length = current_length + len(line_with_newline)
-        
+
         if new_length <= max_len:
             result_lines.append(line)
             current_length = new_length
         else:
             remaining = max_len - current_length
             if i == 0:
-                result_lines.append(line[:max_len-3] + "...")
+                result_lines.append(chatbox_frames.safe_cut(line, max_len - 3) + "...")
             elif remaining > 10:
-                truncated = line[:remaining - 4] + "..."
+                truncated = chatbox_frames.safe_cut(line, remaining - 4) + "..."
                 result_lines.append(truncated)
             break
-    
+
     if not result_lines:
-        return message[:max_len-3] + "..."
+        return chatbox_frames.safe_cut(message, max_len - 3) + "..."
     
     return '\n'.join(result_lines)
 
@@ -1632,22 +1635,26 @@ def create_app():
         progress_percent = 0
         album_art = ""
 
+        song_has_duration = False
         if show_music and sstate.get("song_text"):
             try:
                 pos = int(sstate.get("song_pos", 0))
                 dur = int(sstate.get("song_dur", 0))
-                elapsed_min, elapsed_sec = divmod(pos, 60)
-                total_min, total_sec = divmod(dur, 60)
-                song_text = f"{sstate['song_text']} [{elapsed_min}:{elapsed_sec:02d} / {total_min}:{total_sec:02d}]"
                 if dur > 0:
+                    elapsed_min, elapsed_sec = divmod(pos, 60)
+                    total_min, total_sec = divmod(dur, 60)
+                    song_text = f"{sstate['song_text']} [{elapsed_min}:{elapsed_sec:02d} / {total_min}:{total_sec:02d}]"
                     progress_percent = int((pos / dur) * 100)
+                    song_has_duration = True
+                else:
+                    song_text = sstate["song_text"]
                 album_art = sstate.get("album_art", "")
             except Exception:
                 song_text = sstate.get("song_text", "No song playing")
                 progress_percent = 0
 
         progress_str = ""
-        if SETTINGS.get("music_progress", True) and show_music and sstate.get("song_text"):
+        if SETTINGS.get("music_progress", True) and show_music and sstate.get("song_text") and song_has_duration:
             style = SETTINGS.get("progress_style", "bar")
             if style == "bar":
                 filled = int(progress_percent / 10)
