@@ -14,3 +14,4 @@ pywinctl
 requests
 setproctitle
 websocket-client
+winsdk

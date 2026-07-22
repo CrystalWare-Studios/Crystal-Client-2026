@@ -30,7 +30,7 @@
 - **No more cut-off messages** — long text pages through automatically instead of being truncated, and custom borders always stay intact.
 - **Custom borders, text effects, and layout spacers** so you control exactly how the box looks and how the lines are spaced.
 - **Live VRChat instance** — current world, player count, and join/leave events read straight from the game.
-- **Spotify** now-playing with progress bar (using your own free Spotify app), **weather**, **time**, **system stats** (CPU/RAM/GPU/network/battery), **heart rate** (Pulsoid / HypeRate), and **AFK** status.
+- **Now Playing** — reads whatever's playing automatically on Windows (any player, no setup), or via Last.fm/your own free Spotify app on macOS and Quest — plus **weather**, **time**, **system stats** (CPU/RAM/GPU/network/battery), **heart rate** (Pulsoid / HypeRate), and **AFK** status.
 - **VR battery** — headset and controller battery from SteamVR on PC, and the headset's own battery on Quest.
 - **System/media volume** — your PC's output volume, or the Quest headset's media volume.
 - **Quest storage** — free space remaining on the headset.
@@ -56,7 +56,7 @@
 1. Download the latest release from the [Releases](https://github.com/CrystalWare-Studios/Crystal-Client/releases) page.
 2. Run the app — it opens its own window, no installer needed.
 3. In VRChat, open **Action Menu → Options → OSC → Enable**.
-4. Follow the in-app setup guide the first time you open it. It walks you through OSC, your first message, and connecting Spotify (requires your own free Spotify app — see the FAQ below).
+4. Follow the in-app setup guide the first time you open it. It walks you through OSC, your first message, and Now Playing (automatic on Windows — see the FAQ below for macOS/Quest).
 
 ## Running from source
 
@@ -75,8 +75,8 @@ python main.py              # add --nogui to serve to a browser instead of a win
 
 ## FAQ
 
-**How do I connect Spotify?**
-Spotify requires each user to bring their own free developer app (Spotify limits how many people can use a single shared app). Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard), create an app, then open **Integrations → Spotify Setup** in Crystal Client — it shows you the exact Redirect URI to add to your Spotify app. Paste your Client ID and Client Secret, save, then click **Connect Spotify**.
+**How does Now Playing work?**
+On Windows, nothing to set up — Crystal reads whatever's currently playing straight from Windows Media, for Spotify, YouTube, or any other player. On Quest, open **Integrations → Now Playing Setup** and enter your Last.fm username (connect your player to Last.fm first if you haven't — the panel walks you through it). On macOS, choose either Last.fm the same way, or bring your own free Spotify developer app: go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard), create an app, open **Integrations → Now Playing Setup** in Crystal Client for the exact Redirect URI to add, paste your Client ID and Client Secret, save, then click **Connect Spotify**.
 
 **My heart rate isn't showing.**
 Enter your Pulsoid token (or HypeRate ID) under Integrations → Heart Rate and make sure the source is turned on.

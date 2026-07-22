@@ -65,6 +65,8 @@ DEFAULTS = {
     "spotify_client_secret": "",
     "spotify_refresh_token": "",
     "spotify_update_interval": 2,
+    "now_playing_method": "spotify_api",
+    "lastfm_username": "",
     "custom_texts": ["Crystal Client out now in meta store!", "Join the Discord to support us!"],
     "refresh_interval": 3,
     "osc_send_interval": 3,
@@ -422,6 +424,8 @@ def migrate_settings(data):
     migrated["spotify_update_interval"] = _coerce_int(migrated.get("spotify_update_interval"), 2, 1, 60)
     migrated["spotify_client_id"] = str(migrated.get("spotify_client_id", ""))[:255]
     migrated["spotify_client_secret"] = str(migrated.get("spotify_client_secret", ""))[:255]
+    migrated["lastfm_username"] = str(migrated.get("lastfm_username", ""))[:255]
+    migrated["now_playing_method"] = migrated.get("now_playing_method") if migrated.get("now_playing_method") in ("lastfm", "spotify_api") else "spotify_api"
     migrated["weather_update_interval"] = _coerce_int(migrated.get("weather_update_interval"), 600, 60, 86400)
     migrated["vrchat_live_log_dir"] = str(migrated.get("vrchat_live_log_dir", ""))[:500]
     migrated["vrchat_live_manual_location"] = str(migrated.get("vrchat_live_manual_location", ""))[:500]

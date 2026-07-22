@@ -1515,6 +1515,7 @@ def create_app():
             "dashboard.html",
             platform="quest" if IS_ANDROID else "desktop",
             is_android=IS_ANDROID,
+            spotify_source=spotify.get_spotify_state().get("source", "spotify_api"),
             quest_ip=SETTINGS.get("quest_ip",""),
             quest_port=SETTINGS.get("quest_port",9000),
             spotify_needs_restart=SETTINGS.get("spotify_needs_restart", False),
@@ -2949,6 +2950,24 @@ def create_app():
         _persist_settings(label="spotify_credentials")
         spotify.force_reinit()
         return jsonify({"ok": True, "redirect_uri": f"{request.host_url}spotify-callback"}), 200
+
+    @app.route("/save_lastfm_username", methods=["POST"])
+    def save_lastfm_username():
+        data = request.get_json(force=True)
+        username = str(data.get("lastfm_username", "") or "").strip()
+        SETTINGS["lastfm_username"] = username
+        _persist_settings(label="lastfm_username")
+        return jsonify({"ok": True}), 200
+
+    @app.route("/save_now_playing_method", methods=["POST"])
+    def save_now_playing_method():
+        data = request.get_json(force=True)
+        method = str(data.get("now_playing_method", "") or "").strip()
+        if method not in ("lastfm", "spotify_api"):
+            return jsonify({"ok": False, "error": "Invalid now playing method."}), 400
+        SETTINGS["now_playing_method"] = method
+        _persist_settings(label="now_playing_method")
+        return jsonify({"ok": True}), 200
 
     @app.route("/save_emoji_settings", methods=["POST"])
     def save_emoji_settings():

@@ -437,7 +437,11 @@
         onClick("refresh_integrations", () => loadState({ silent: false }));
         onClick("spotify_save_credentials", saveSpotifyCredentials);
         onClick("spotify_save_connect", saveAndConnectSpotify);
+        onClick("spotify_save_lastfm", saveLastfmUsername);
         onClick("spotify_save_display", saveSpotifyDisplaySettings);
+        if ($("spotify_now_playing_method")) {
+            $("spotify_now_playing_method").addEventListener("change", saveNowPlayingMethod);
+        }
         onClick("heart_rate_save_setup", saveHeartRateSettings);
         const section = $("section_integrations");
         if (section) {
@@ -466,6 +470,25 @@
     function renderSpotifySetup(spotify, settings) {
         const status = $("spotify_setup_status");
         if (!status) return;
+        const source = spotify.source || "spotify_api";
+        if ($("spotify_windows_media_group")) {
+            $("spotify_windows_media_group").style.display = source === "windows_media" ? "" : "none";
+        }
+        if ($("spotify_method_switch_group")) {
+            $("spotify_method_switch_group").style.display = source === "windows_media" ? "none" : "";
+        }
+        if ($("spotify_lastfm_group")) {
+            $("spotify_lastfm_group").style.display = source === "lastfm" ? "" : "none";
+        }
+        if ($("spotify_client_setup_group")) {
+            $("spotify_client_setup_group").style.display = source === "spotify_api" ? "" : "none";
+        }
+        if ($("spotify_now_playing_method") && document.activeElement !== $("spotify_now_playing_method")) {
+            $("spotify_now_playing_method").value = source === "windows_media" ? "spotify_api" : source;
+        }
+        if ($("spotify_lastfm_username") && document.activeElement !== $("spotify_lastfm_username")) {
+            $("spotify_lastfm_username").value = settings.lastfm_username || "";
+        }
         if ($("spotify_redirect_uri_display")) {
             $("spotify_redirect_uri_display").value = `${window.location.origin}/spotify-callback`;
         }
@@ -479,13 +502,31 @@
             $("spotify_progress_style").value = settings.progress_style || "bar";
         }
         const s = String(spotify.status || "").toLowerCase();
-        if (s === "connected" || spotify.song_text) {
+        if (source === "windows_media") {
+            status.textContent = spotify.song_text ? "Reading now-playing from Windows Media." : "Reading from Windows Media. Nothing detected playing right now.";
+        } else if (source === "lastfm") {
+            status.textContent = spotify.configured
+                ? (spotify.song_text ? "Reading now-playing from Last.fm." : (spotify.last_error || "Waiting for Last.fm to show something scrobbling as now playing."))
+                : "Enter your Last.fm username above to show now-playing.";
+        } else if (s === "connected" || spotify.song_text) {
             status.textContent = "Connected. Your current song will show in the chatbox when Music is on.";
         } else if (!settings.spotify_client_id) {
             status.textContent = "Add your Spotify Client ID and Client Secret above, save, then click Connect Spotify.";
         } else {
             status.textContent = spotify.last_error || "Not connected yet. Click Connect Spotify to sign in.";
         }
+    }
+
+    async function saveLastfmUsername() {
+        const username = $("spotify_lastfm_username") ? $("spotify_lastfm_username").value.trim() : "";
+        await api("/save_lastfm_username", { method: "POST", body: { lastfm_username: username } });
+        toast("Last.fm username saved.", "success");
+    }
+
+    async function saveNowPlayingMethod() {
+        const method = $("spotify_now_playing_method") ? $("spotify_now_playing_method").value : "spotify_api";
+        await api("/save_now_playing_method", { method: "POST", body: { now_playing_method: method } });
+        toast("Now Playing source updated.", "success");
     }
 
     async function saveSpotifyCredentials() {
@@ -1736,8 +1777,8 @@
                         title: "Spotify",
                         status: spotifyStatus(integrations.spotify),
                         detail: (integrations.spotify && integrations.spotify.song_text) || (integrations.spotify && integrations.spotify.last_error) || "Shows the current song when connected.",
-                        help: "Requires your own free Spotify app (Client ID/Secret) from developer.spotify.com.",
-                        actions: [{ label: "Connect", action: "spotify_connect" }]
+                        help: spotifyHelpText(integrations.spotify),
+                        actions: spotifyCardActions(integrations.spotify)
                     },
                     {
                         title: "Weather",
@@ -2589,6 +2630,19 @@
         if (spotify.last_error) return "error";
         if (spotify.song_text) return "connected";
         return spotify.configured ? "ready" : "not configured";
+    }
+
+    function spotifyHelpText(spotify) {
+        const source = spotify && spotify.source;
+        if (source === "windows_media") return "Reads whatever's playing from Windows Media - no setup needed.";
+        if (source === "lastfm") return "Reads whatever's scrobbling on Last.fm - enter your username under Now Playing Setup.";
+        return "Requires your own free Spotify app (Client ID/Secret) from developer.spotify.com.";
+    }
+
+    function spotifyCardActions(spotify) {
+        const source = spotify && spotify.source;
+        if (source === "windows_media" || source === "lastfm") return [];
+        return [{ label: "Connect", action: "spotify_connect" }];
     }
 
     function weatherDetail(weather) {

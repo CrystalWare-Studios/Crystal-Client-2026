@@ -449,16 +449,46 @@
             <div id="integration_grid" class="dashboard-grid three"></div>
             <div class="dashboard-grid three integration-tools">
                 <details class="panel collapsible" id="spotify_setup_panel">
-                    <summary><h3>Spotify Setup</h3></summary>
-                    <p class="field-note">Shows your current song in the chatbox using your own Spotify app.</p>
-                    <p>Create a free app at <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com/dashboard</a>, add the Redirect URI shown below to it, then paste your Client ID and Client Secret here and click Connect Spotify.</p>
-                    <label class="field"><span>Redirect URI to add in your Spotify app</span><input id="spotify_redirect_uri_display" type="text" readonly></label>
-                    <label class="field"><span>Client ID</span><input id="spotify_client_id_setup" type="password" autocomplete="off" placeholder="Enter Client ID or leave blank to keep saved value"></label>
-                    <label class="field"><span>Client Secret</span><input id="spotify_client_secret_setup" type="password" autocomplete="off" placeholder="Enter Client Secret or leave blank to keep saved value"></label>
-                    <div class="button-row wrap">
-                        <button id="spotify_save_credentials" class="secondary" type="button">Save Spotify credentials</button>
-                        <button id="spotify_save_connect" type="button">Connect Spotify</button>
+                    <summary><h3>Now Playing Setup</h3></summary>
+                    <p class="field-note">Shows your current song in the chatbox.</p>
+                    <div id="spotify_windows_media_group">
+                        <p>Reading directly from Windows Media - no setup needed. Works with Spotify, YouTube, or any other player.</p>
                     </div>
+                    {% if not is_android %}
+                    <div id="spotify_method_switch_group">
+                        <label class="field"><span>Now Playing source</span>
+                            <select id="spotify_now_playing_method">
+                                <option value="spotify_api">Spotify (Client ID/Secret)</option>
+                                <option value="lastfm">Last.fm</option>
+                            </select>
+                        </label>
+                    </div>
+                    {% endif %}
+                    <div id="spotify_lastfm_group">
+                        <p><strong>How to link Last.fm:</strong></p>
+                        <ol class="steps">
+                            <li>Don't have a Last.fm account? Create a free one at <a href="https://www.last.fm/join" target="_blank" rel="noopener">last.fm/join</a>.</li>
+                            <li>Connect your music player to Last.fm so it reports what you're playing (called "scrobbling"). If you use Spotify, open the Spotify app on any device, go to <strong>Settings → Social → Last.fm</strong>, and connect your account. Other players have similar options, or use one of <a href="https://www.last.fm/about/trackmymusic" target="_blank" rel="noopener">Last.fm's official scrobbler apps</a>.</li>
+                            <li>Enter your Last.fm username below and save.</li>
+                        </ol>
+                        <label class="field"><span>Last.fm username</span><input id="spotify_lastfm_username" type="text" autocomplete="off" placeholder="Your Last.fm username"></label>
+                        <div class="button-row wrap">
+                            <button id="spotify_save_lastfm" class="secondary" type="button">Save Last.fm username</button>
+                        </div>
+                        <p class="field-note">This panel updates automatically once something you're scrobbling starts playing.</p>
+                    </div>
+                    {% if not is_android %}
+                    <div id="spotify_client_setup_group">
+                        <p>Create a free app at <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com/dashboard</a>, add the Redirect URI shown below to it, then paste your Client ID and Client Secret here and click Connect Spotify.</p>
+                        <label class="field"><span>Redirect URI to add in your Spotify app</span><input id="spotify_redirect_uri_display" type="text" readonly></label>
+                        <label class="field"><span>Client ID</span><input id="spotify_client_id_setup" type="password" autocomplete="off" placeholder="Enter Client ID or leave blank to keep saved value"></label>
+                        <label class="field"><span>Client Secret</span><input id="spotify_client_secret_setup" type="password" autocomplete="off" placeholder="Enter Client Secret or leave blank to keep saved value"></label>
+                        <div class="button-row wrap">
+                            <button id="spotify_save_credentials" class="secondary" type="button">Save Spotify credentials</button>
+                            <button id="spotify_save_connect" type="button">Connect Spotify</button>
+                        </div>
+                    </div>
+                    {% endif %}
                     <label class="switch-row"><input id="spotify_show_music" type="checkbox"> <span>Show music in chatbox</span></label>
                     <label class="switch-row"><input id="spotify_music_progress" type="checkbox"> <span>Show music progress bar</span></label>
                     <label class="field"><span>Progress style</span><select id="spotify_progress_style"><option value="bar">Bar</option><option value="dots">Dots</option><option value="percentage">Percentage</option></select></label>
@@ -837,8 +867,14 @@
             <p class="field-note">Turn parts on or off any time under Chatbox → Message Parts.</p>
         </div>
         <div class="wizard-step" data-step="5">
-            <h4>Step 4 — Connect Spotify (optional)</h4>
-            <p>Open <strong>Integrations → Spotify Setup</strong>. Create a free app at <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com/dashboard</a>, add the Redirect URI shown there to it, paste your Client ID and Client Secret, save, then click <strong>Connect Spotify</strong> and approve playback access.</p>
+            <h4>Step 4 — Now Playing (optional)</h4>
+            {% if spotify_source == "windows_media" %}
+            <p>Nothing to set up — Crystal reads whatever's currently playing straight from Windows, for Spotify, YouTube, or any other player.</p>
+            {% elif is_android %}
+            <p>Open <strong>Integrations → Now Playing Setup</strong> and enter your Last.fm username (a full walkthrough is right there — connecting your player to Last.fm takes a couple minutes if you haven't already).</p>
+            {% else %}
+            <p>Open <strong>Integrations → Now Playing Setup</strong>. Either connect Spotify directly with your own free developer app (Client ID/Secret), or use Last.fm instead — whichever is easier, both are explained right there.</p>
+            {% endif %}
             <p class="field-note">You can skip this now and do it later — everything else works without it.</p>
         </div>
         <div class="wizard-step" data-step="6">
