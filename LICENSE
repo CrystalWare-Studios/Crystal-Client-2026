@@ -1,0 +1,82 @@
+Crystal Client Source-Available License 1.0
+
+Copyright (c) 2025-2026 CrystalWare Studios ("the Author"). All rights reserved.
+
+1. Definitions
+
+"The Software" means the source code, assets, documentation, and other
+files in this repository, in any form.
+
+"You" means the individual or entity exercising the permissions granted
+by this License.
+
+2. Grant of Rights
+
+Subject to the terms below, the Author grants You a worldwide,
+royalty-free, non-exclusive, non-transferable license to:
+
+  a. View and read the Software's source code for personal education,
+     evaluation, and reference purposes.
+
+  b. Download and run unmodified builds of the Software for your own
+     personal, non-commercial use.
+
+No other rights are granted. In particular, You do NOT have permission
+to:
+
+  a. Copy, fork, redistribute, publish, or mirror the Software or any
+     substantial part of it, in source or compiled form, on any other
+     platform, repository, storefront, or file-sharing service.
+
+  b. Modify, translate, reverse-engineer, or create derivative works
+     based on the Software, except for changes kept strictly for your
+     own private, non-distributed use.
+
+  c. Use the Software, or any part of it, in a commercial product or
+     service, or to generate revenue in any form (including but not
+     limited to donations, subscriptions, or ad-supported
+     redistribution).
+
+  d. Represent yourself as the author or owner of the Software, remove
+     or alter copyright/attribution notices, or present the Software
+     (or a modified version of it) as your own original work.
+
+  e. Sublicense, sell, rent, lease, or otherwise transfer any of the
+     rights granted under this License.
+
+3. Contributions
+
+If You submit a contribution (such as a pull request or patch) to this
+repository, You agree that it is licensed to the Author under the same
+terms as the rest of the Software, and that the Author may use,
+relicense, and redistribute your contribution as part of the Software
+without further obligation.
+
+4. No Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM,
+DAMAGES, OR OTHER LIABILITY ARISING FROM, OUT OF, OR IN CONNECTION WITH
+THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+5. Termination
+
+Any use of the Software that violates this License automatically
+terminates your rights under it. The Author may also grant additional
+permissions beyond this License on a case-by-case basis, in writing.
+
+6. Third-Party Components
+
+This project uses third-party open-source libraries and services, each
+under their own respective licenses (see requirements.txt / package
+manifests for the full list). Those components remain governed by
+their own license terms and are not covered by this License.
+
+---
+
+Plain-language summary (not a substitute for the terms above): you're
+welcome to read the code, learn from it, and run the app for yourself.
+Please don't copy it, rebrand it, sell it, or claim you made it. If you
+want to use any part of this project for something else, ask first.

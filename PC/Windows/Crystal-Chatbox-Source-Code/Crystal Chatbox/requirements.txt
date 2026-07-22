@@ -1,0 +1,16 @@
+comtypes
+Flask==3.0.0
+gunicorn
+keyboard
+openai
+openvr
+packaging
+psutil
+pycaw
+python-osc==1.8.3
+pytz==2023.3
+pywebview>=5.0
+pywinctl
+requests
+setproctitle
+websocket-client

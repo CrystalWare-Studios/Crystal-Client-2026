@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crystal Client</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script>
+        window.CONFIG = {
+            refresh_interval: {{ dashboard_update_interval | default(3) }},
+            setup_completed: {{ 'true' if setup_completed | default(false) else 'false' }},
+            theme: "{{ theme | default('dark') }}",
+            platform: "{{ platform | default('desktop') }}"
+        };
+    </script>
+</head>
+<body class="{{ theme | default('dark') }}">
+<div class="app-shell">
+    <aside class="sidebar" aria-label="Main navigation">
+        <div class="brand">
+            <img src="/static/logo.png" alt="" class="brand-logo">
+            <div>
+                <h1>Crystal Client</h1>
+                <p>by CrystalWare Studios</p>
+            </div>
+        </div>
+        <label class="search-box">
+            <span>Search</span>
+            <input id="global_search" type="search" placeholder="OSC, Spotify, profile...">
+        </label>
+        <nav id="main_nav" class="nav-list">
+            <button class="nav-item active" data-section="home" type="button">Home</button>
+            <button class="nav-item" data-section="chatbox" type="button">Chatbox</button>
+            <button class="nav-item" data-section="presets" type="button">Presets</button>
+            <button class="nav-item" data-section="automations" type="button">Automations</button>
+            <button class="nav-item" data-section="integrations" type="button">Integrations</button>
+            <button class="nav-item" data-section="appearance" type="button">Appearance</button>
+            <button class="nav-item" data-section="profiles" type="button">Profiles</button>
+            <button class="nav-item" data-section="logs" type="button">Logs</button>
+            <button class="nav-item" data-section="settings" type="button">Settings</button>
+            <button class="nav-item" data-section="help" type="button">Help</button>
+        </nav>
+        <div class="sidebar-footer">
+            <span id="sidebar_status">Starting...</span>
+        </div>
+    </aside>
+
+    <main class="main">
+        <header class="topbar">
+            <div>
+                <p class="eyebrow" id="current_profile_label">Profile: Default</p>
+                <h2 id="page_title">Home</h2>
+            </div>
+            <div class="topbar-actions">
+                <span id="osc_badge" class="status-pill neutral">OSC unknown</span>
+                <button id="quick_test_osc" class="secondary" type="button">Test OSC</button>
+                <button id="open_setup" class="secondary" type="button">Setup</button>
+            </div>
+        </header>
+
+        <div id="toast_region" class="toast-region" aria-live="polite"></div>
+
+        <section id="section_home" class="section active">
+            <div class="notice-panel">
+                <strong>🎁 Join the Discord</strong> to participate in VRC+ or Nitro giveaways every two weeks!
+                <a href="https://discord.gg/uxPdvQkfP5" target="_blank" rel="noopener">discord.gg/uxPdvQkfP5</a>
+            </div>
+            <div class="dashboard-grid">
+                <article class="panel span-2">
+                    <div class="panel-head">
+                        <div>
+                            <h3>Current Chatbox</h3>
+                            <p>The exact message Crystal is preparing for VRChat.</p>
+                        </div>
+                        <span id="chatbox_enabled_badge" class="status-pill neutral">Unknown</span>
+                    </div>
+                    <pre id="home_preview" class="message-preview">Loading preview...</pre>
+                    <div class="button-row">
+                        <button id="home_send_now" type="button">Send now</button>
+                        <button id="home_clear" class="secondary" type="button">Clear</button>
+                        <button id="home_toggle_chatbox" class="secondary" type="button">Toggle chatbox</button>
+                    </div>
+                </article>
+                <article class="panel">
+                    <h3>Connection</h3>
+                    <dl class="status-list">
+                        <div><dt>OSC target</dt><dd id="home_osc_target">-</dd></div>
+                        <div><dt>Last sent</dt><dd id="home_last_sent">Never</dd></div>
+                        <div><dt>Preset</dt><dd id="home_preset">None</dd></div>
+                    </dl>
+                </article>
+                <article class="panel">
+                    <h3>Enabled Automations</h3>
+                    <div id="home_automations" class="empty-state">No automation data yet.</div>
+                </article>
+                <article class="panel span-2">
+                    <h3>Warnings and Next Steps</h3>
+                    <div id="home_warnings" class="stack"></div>
+                </article>
+                <article class="panel span-2">
+                    <h3>Recent Activity</h3>
+                    <div id="home_activity" class="log-list compact"></div>
+                </article>
+                <article class="panel span-2">
+                    <h3>Session Insights</h3>
+                    <p class="field-note">Since Crystal was last started. Resets on restart.</p>
+                    <dl class="status-list">
+                        <div><dt>Uptime</dt><dd id="insights_uptime">-</dd></div>
+                        <div><dt>Messages sent this session</dt><dd id="insights_messages">-</dd></div>
+                        <div><dt>Messages sent (last hour / last day)</dt><dd id="insights_messages_period">-</dd></div>
+                        <div><dt>Unique songs played</dt><dd id="insights_unique_songs">-</dd></div>
+                    </dl>
+                    <h4>Top songs this session</h4>
+                    <div id="insights_top_songs" class="item-list compact-list">No songs tracked yet.</div>
+                </article>
+            </div>
+        </section>
+
+        <section id="section_chatbox" class="section">
+            <div class="notice-panel">
+                <strong>How the chatbox is built:</strong>
+                Crystal combines the enabled message parts below in order. Edit your normal text in Custom Messages and turn parts on or off in Message Parts{% if not is_android %}, including CPU/RAM/GPU output in System Stats{% endif %}.
+            </div>
+            <div class="dashboard-grid two">
+                <article class="panel">
+                    <div class="panel-head">
+                        <div>
+                            <h3>Message Parts</h3>
+                            <p>These are the pieces Crystal uses to build the automatic chatbox message.</p>
+                        </div>
+                    </div>
+                    <div id="module_toggles" class="module-list"></div>
+                    <label class="field">
+                        <span>Order used in the final chatbox</span>
+                        <select id="layout_order_select" multiple size="8"></select>
+                    </label>
+                    <p class="field-note">Top to bottom is the send order. Select a part and use Move up/down to reorder, or add a spacer to put blank space or a divider between two parts.</p>
+                    <div class="button-row wrap">
+                        <button id="module_move_up" class="secondary" type="button">Move up</button>
+                        <button id="module_move_down" class="secondary" type="button">Move down</button>
+                        <button id="add_spacer" class="secondary" type="button">Add spacer</button>
+                        <button id="remove_spacer" class="danger" type="button">Remove selected spacer</button>
+                        <button id="save_layout_order" type="button">Save order</button>
+                    </div>
+                    <label class="field" id="spacer_text_field" style="display:none;">
+                        <span>Selected spacer text (leave blank for an empty line)</span>
+                        <input id="spacer_text_input" type="text" maxlength="20" placeholder="e.g. --- or leave blank">
+                    </label>
+                </article>
+                <article class="panel">
+                    <div class="panel-head">
+                        <div>
+                            <h3>Custom Messages</h3>
+                            <p>This is your main rotating text. Edit these to configure the automatic chatbox.</p>
+                        </div>
+                    </div>
+                    <label class="field">
+                        <span>One message per line</span>
+                        <textarea id="custom_messages_text" rows="8" placeholder="Hello, come chat!"></textarea>
+                    </label>
+                    <div class="button-row wrap">
+                        <button id="save_custom_messages" type="button">Save custom messages</button>
+                        <button id="use_first_custom" class="secondary" type="button">Copy first line to Send a Message</button>
+                    </div>
+                </article>
+            </div>
+            <div class="dashboard-grid two chatbox-tools">
+                {% if not is_android %}
+                <article class="panel">
+                    <div class="panel-head">
+                        <div>
+                            <h3>System Stats</h3>
+                            <p>Controls the CPU/RAM/GPU/network part of your chatbox.</p>
+                        </div>
+                        <label class="switch-row">
+                            <input id="system_stats_enabled_editor" type="checkbox">
+                            <span>Show system stats</span>
+                        </label>
+                    </div>
+                    <div class="check-grid">
+                        <label><input id="system_show_cpu" type="checkbox"> CPU</label>
+                        <label><input id="system_show_ram" type="checkbox"> RAM</label>
+                        <label><input id="system_show_gpu" type="checkbox"> GPU</label>
+                        <label><input id="system_show_network" type="checkbox"> Network</label>
+                        <label><input id="system_show_battery" type="checkbox"> PC Battery</label>
+                    </div>
+                    <label class="field">
+                        <span>System stats template</span>
+                        <textarea id="system_stats_template_editor" rows="4" placeholder="{system_emoji} {cpu_emoji} CPU {cpu} | {ram_emoji} RAM {ram}"></textarea>
+                    </label>
+                    <div class="button-row wrap">
+                        <button class="var-token system-var-token" data-token="{cpu}" type="button">{cpu}</button>
+                        <button class="var-token system-var-token" data-token="{ram}" type="button">{ram}</button>
+                        <button class="var-token system-var-token" data-token="{gpu}" type="button">{gpu}</button>
+                        <button class="var-token system-var-token" data-token="{download}" type="button">{download}</button>
+                        <button class="var-token system-var-token" data-token="{upload}" type="button">{upload}</button>
+                        <button class="var-token system-var-token" data-token="{battery}" type="button">{battery}</button>
+                    </div>
+                    <div class="form-grid compact-fields">
+                        <label class="field"><span>Update every seconds</span><input id="system_update_interval" type="number" min="2" max="30"></label>
+                        <label class="field"><span>Decimals</span><select id="system_decimals"><option value="0">0</option><option value="1">1</option><option value="2">2</option></select></label>
+                        <label class="field"><span>Network units</span><select id="system_network_units"><option value="bits">Bits</option><option value="bytes">Bytes</option></select></label>
+                    </div>
+                    <div class="button-row wrap">
+                        <button id="save_system_stats_editor" type="button">Save system stats</button>
+                    </div>
+                </article>
+                {% endif %}
+                <article class="panel">
+                    <h3>What Will Send</h3>
+                    <p class="field-note">This shows the full automatic message after message parts, order, and templates are applied.</p>
+                    <pre id="assembled_chatbox_preview" class="message-preview small">Loading preview...</pre>
+                    {% if not is_android %}<h4>System stats preview</h4>
+                    <pre id="system_stats_preview_editor" class="message-preview tiny">System stats are off.</pre>{% endif %}
+                </article>
+                {% if not is_android %}
+                <article class="panel">
+                    <div class="panel-head">
+                        <div>
+                            <h3>Active Window</h3>
+                            <p>Controls the "Currently on: ..." part of your chatbox.</p>
+                        </div>
+                        <label class="switch-row">
+                            <input id="window_tracking_enabled_editor" type="checkbox">
+                            <span>Track active window</span>
+                        </label>
+                    </div>
+                    <div class="form-grid compact-fields">
+                        <label class="field"><span>Icon</span><input id="window_emoji_editor" type="text" maxlength="8" placeholder="💻"></label>
+                        <label class="field"><span>Prefix text</span><input id="window_prefix_editor" type="text" maxlength="30" placeholder="Currently on:"></label>
+                        <label class="field"><span>Max title length</span><input id="window_max_length_editor" type="number" min="10" max="144"></label>
+                        <label class="field"><span>Detect</span>
+                            <select id="window_tracking_mode_editor">
+                                <option value="both">Apps and browser tabs</option>
+                                <option value="app">Apps only</option>
+                                <option value="browser">Browser tabs only</option>
+                            </select>
+                        </label>
+                    </div>
+                    <label class="field">
+                        <span>Rename detected programs (one per line: original = custom name)</span>
+                        <textarea id="window_aliases_editor" rows="4" placeholder="chrome.exe = Browsing&#10;code.exe = Writing Code&#10;Discord = Chatting"></textarea>
+                    </label>
+                    <p class="field-note">Match either the process name (like "chrome.exe") or the name Crystal would normally show (like "Chrome").</p>
+                    <div class="button-row wrap">
+                        <button id="save_window_editor" type="button">Save active window settings</button>
+                    </div>
+                </article>
+                {% endif %}
+            </div>
+            <div class="notice-panel manual-send-note">
+                <strong>Send a Message is one-time only:</strong>
+                Use this when you want to push one message through the chatbox right now. It does not configure your automatic chatbox rotation.
+            </div>
+            <div class="editor-layout">
+                <article class="panel">
+                    <div class="panel-head">
+                        <div>
+                            <h3>Send a Message</h3>
+                            <p>Type a one-time message to send through the chatbox.</p>
+                        </div>
+                        <label class="switch-row">
+                            <input id="chatbox_enabled" type="checkbox">
+                            <span>Chatbox active</span>
+                        </label>
+                    </div>
+                    <label class="field">
+                        <span>One-time message</span>
+                        <textarea id="message_template" rows="7" maxlength="1000" placeholder="Type a one-time message or use variables like {time}, {song}, {weather}"></textarea>
+                    </label>
+                    <div class="editor-meta">
+                        <span id="char_count">0 / 144</span>
+                        <span id="validation_text">Ready</span>
+                    </div>
+                    <div class="button-row wrap">
+                        <button class="var-token" data-token="{time}" type="button">{time}</button>
+                        <button class="var-token" data-token="{song}" type="button">{song}</button>
+                        <button class="var-token" data-token="{weather}" type="button">{weather}</button>
+                        <button class="var-token" data-token="{heartrate}" type="button">{heartrate}</button>
+                        {% if not is_android %}<button class="var-token" data-token="{system}" type="button">{system}</button>{% endif %}
+                    </div>
+                    <div class="button-row">
+                        <button id="send_message" type="button">Send message</button>
+                        <button id="clear_chatbox" class="secondary" type="button">Clear chatbox</button>
+                        <button id="save_as_preset" class="secondary" type="button">Save as preset</button>
+                        <button id="favorite_message" class="secondary" type="button">Favorite</button>
+                    </div>
+                </article>
+                {% if not is_android %}
+                <article class="panel">
+                    <h3>Preview</h3>
+                    <p class="field-note">Crystal warns before VRChat's 144-character limit is exceeded.</p>
+                    <h4>Resolved message</h4>
+                    <pre id="resolved_preview" class="message-preview small"></pre>
+                    <h4>Final output</h4>
+                    <pre id="final_preview" class="message-preview small"></pre>
+                    <h4>Currently being sent</h4>
+                    <pre id="current_sending" class="message-preview tiny">None yet.</pre>
+                    <h4>Previous message</h4>
+                    <pre id="previous_message" class="message-preview tiny">None yet.</pre>
+                </article>
+            </div>
+            <div class="dashboard-grid two">
+                <article class="panel">
+                    <h3>Recent Messages</h3>
+                    <div id="recent_messages" class="item-list"></div>
+                </article>
+                <article class="panel">
+                    <h3>Favorites and Templates</h3>
+                    <div id="favorite_messages" class="item-list"></div>
+                    <div id="saved_templates" class="item-list"></div>
+                </article>
+            </div>
+            <div class="dashboard-grid two">
+                <article class="panel">
+                    <div class="panel-head">
+                        <div>
+                            <h3>Quick Phrases</h3>
+                            <p>One click sends the phrase through the chatbox for your normal manual-message duration.</p>
+                        </div>
+                    </div>
+                    <div id="quick_phrases_list" class="item-list compact-list">Loading...</div>
+                    <div class="form-grid compact-fields">
+                        <label class="field"><span>New phrase</span><input id="quick_phrase_text" type="text" maxlength="200" placeholder="Following you!"></label>
+                        <label class="field"><span>Category</span><input id="quick_phrase_category" type="text" maxlength="40" placeholder="social"></label>
+                    </div>
+                    <div class="button-row wrap">
+                        <button id="add_quick_phrase" class="secondary" type="button">Add phrase</button>
+                    </div>
+                </article>
+                <article class="panel">
+                    <div class="panel-head">
+                        <div>
+                            <h3>Global Hotkeys</h3>
+                            <p>Fire a quick phrase from anywhere, even with the dashboard in the background. Desktop only.</p>
+                        </div>
+                        <label class="switch-row">
+                            <input id="global_hotkeys_enabled" type="checkbox">
+                            <span>Enabled</span>
+                        </label>
+                    </div>
+                    <div id="global_hotkeys_warning" class="notice-panel" style="display:none;"></div>
+                    <div class="form-grid compact-fields">
+                        <label class="field"><span>Key combo</span><input id="hotkey_combo_input" type="text" maxlength="60" placeholder="ctrl+alt+1"></label>
+                        <label class="field"><span>Phrase to send</span><select id="hotkey_phrase_select"></select></label>
+                    </div>
+                    <div class="button-row wrap">
+                        <button id="add_global_hotkey" class="secondary" type="button">Add hotkey</button>
+                    </div>
+                    <div id="global_hotkeys_list" class="item-list compact-list">No hotkeys yet.</div>
+                </article>
+                {% endif %}
+            </div>
+        </section>
+
+        <section id="section_presets" class="section">
+            <div class="notice-panel">
+                <strong>New here? You can skip presets.</strong>
+                For everyday use, just edit your rotating lines in the <strong>Chatbox</strong> tab. Presets are optional saved bundles &mdash; a message plus its formatting and which parts are on &mdash; for switching between whole looks (say, a streaming setup vs a casual one). Applying one replaces your current message, speed, formatting, and enabled parts.
+            </div>
+            <div class="section-toolbar">
+                <div>
+                    <h3>Presets</h3>
+                    <p>Create reusable setups for different moods, games, streaming, music display, or away status.</p>
+                </div>
+                <button id="new_preset" type="button">New preset</button>
+            </div>
+            <div class="split-layout">
+                <div id="preset_list" class="item-list"></div>
+                <article class="panel">
+                    <h3 id="preset_editor_title">Edit preset</h3>
+                    <p class="field-note">Select a preset on the left to edit it, or click New preset. Save stores changes. Apply makes it your current chatbox setup.</p>
+                    <input id="preset_id" type="hidden">
+                    <label class="field"><span>Name</span><input id="preset_name" type="text" maxlength="80"></label>
+                    <label class="field"><span>Description</span><input id="preset_description" type="text" maxlength="240"></label>
+                    <label class="field"><span>Message template</span><textarea id="preset_template" rows="5"></textarea></label>
+                    <div class="form-grid">
+                        <label class="field"><span>Refresh seconds</span><input id="preset_refresh" type="number" min="1" max="3600"></label>
+                        <label class="field"><span>Display seconds</span><input id="preset_duration" type="number" min="1" max="60"></label>
+                        <label class="field"><span>Priority</span><input id="preset_priority" type="number" min="0" max="100"></label>
+                    </div>
+                    <div class="button-row">
+                        <button id="save_preset" type="button">Save preset</button>
+                        <button id="apply_preset" class="secondary" type="button">Apply</button>
+                        <button id="duplicate_preset" class="secondary" type="button">Duplicate</button>
+                        <button id="delete_preset" class="danger" type="button">Delete</button>
+                    </div>
+                </article>
+            </div>
+            <article class="panel">
+                <div class="panel-head">
+                    <div>
+                        <h3>Auto-Switch by World</h3>
+                        <p>Automatically apply a preset when you join a matching VRChat world - no manual switching between games/worlds.</p>
+                    </div>
+                    <label class="switch-row">
+                        <input id="world_preset_enabled" type="checkbox">
+                        <span>Enabled</span>
+                    </label>
+                </div>
+                <div class="notice-panel" id="world_preset_current_world">Current world: unknown. Join a world with VRChat Instance detection on to add a rule for it.</div>
+                <div class="form-grid compact-fields">
+                    <label class="field"><span>Preset to apply for current world</span><select id="world_preset_select"></select></label>
+                </div>
+                <div class="button-row">
+                    <button id="world_preset_add_current" class="secondary" type="button">Add rule for current world</button>
+                </div>
+                <div id="world_preset_rules" class="item-list compact-list">No world rules yet.</div>
+            </article>
+        </section>
+
+        <section id="section_automations" class="section">
+            <div class="section-toolbar">
+                <div>
+                    <h3>Automations</h3>
+                    <p>When multiple rules run, highest priority wins.</p>
+                </div>
+                <button id="new_automation" type="button">New automation</button>
+            </div>
+            <div class="split-layout">
+                <div id="automation_list" class="item-list"></div>
+                <article class="panel">
+                    <h3>Edit automation</h3>
+                    <input id="automation_id" type="hidden">
+                    <label class="switch-row"><input id="automation_enabled" type="checkbox"> <span>Enabled</span></label>
+                    <label class="field"><span>Name</span><input id="automation_name" type="text"></label>
+                    <label class="field"><span>Trigger</span><select id="automation_trigger"><option value="timed">Timed</option><option value="always">Always available</option><option value="idle">When idle</option></select></label>
+                    <label class="field"><span>Message</span><textarea id="automation_message" rows="4"></textarea></label>
+                    <div class="form-grid">
+                        <label class="field"><span>Every seconds</span><input id="automation_interval" type="number" min="5" max="86400"></label>
+                        <label class="field"><span>Priority</span><input id="automation_priority" type="number" min="0" max="100"></label>
+                    </div>
+                    <div class="button-row">
+                        <button id="save_automation" type="button">Save automation</button>
+                        <button id="delete_automation" class="danger" type="button">Delete</button>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section id="section_integrations" class="section">
+            <div class="section-toolbar">
+                <div>
+                    <h3>Integrations</h3>
+                    <p>Connect services, tracker tools, router output, and VRChat account features.</p>
+                </div>
+                <button id="refresh_integrations" class="secondary" type="button">Refresh</button>
+            </div>
+            <div id="integration_grid" class="dashboard-grid three"></div>
+            <div class="dashboard-grid three integration-tools">
+                <details class="panel collapsible" id="spotify_setup_panel">
+                    <summary><h3>Spotify Setup</h3></summary>
+                    <p class="field-note">Shows your current song in the chatbox using your own Spotify app.</p>
+                    <p>Create a free app at <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com/dashboard</a>, add the Redirect URI shown below to it, then paste your Client ID and Client Secret here and click Connect Spotify.</p>
+                    <label class="field"><span>Redirect URI to add in your Spotify app</span><input id="spotify_redirect_uri_display" type="text" readonly></label>
+                    <label class="field"><span>Client ID</span><input id="spotify_client_id_setup" type="password" autocomplete="off" placeholder="Enter Client ID or leave blank to keep saved value"></label>
+                    <label class="field"><span>Client Secret</span><input id="spotify_client_secret_setup" type="password" autocomplete="off" placeholder="Enter Client Secret or leave blank to keep saved value"></label>
+                    <div class="button-row wrap">
+                        <button id="spotify_save_credentials" class="secondary" type="button">Save Spotify credentials</button>
+                        <button id="spotify_save_connect" type="button">Connect Spotify</button>
+                    </div>
+                    <label class="switch-row"><input id="spotify_show_music" type="checkbox"> <span>Show music in chatbox</span></label>
+                    <label class="switch-row"><input id="spotify_music_progress" type="checkbox"> <span>Show music progress bar</span></label>
+                    <label class="field"><span>Progress style</span><select id="spotify_progress_style"><option value="bar">Bar</option><option value="dots">Dots</option><option value="percentage">Percentage</option></select></label>
+                    <div class="button-row wrap">
+                        <button id="spotify_save_display" class="secondary" type="button">Save music display</button>
+                    </div>
+                    <div id="spotify_setup_status" class="field-note"></div>
+                </details>
+                <details class="panel collapsible" id="heart_rate_setup_panel">
+                    <summary><h3>Heart Rate Setup</h3></summary>
+                    <label class="switch-row"><input id="heart_rate_enabled_setup" type="checkbox"> <span>Show heart rate in chatbox</span></label>
+                    <label class="field"><span>Source</span><select id="heart_rate_source_setup"><option value="pulsoid">Pulsoid</option><option value="hyperate">HypeRate</option><option value="custom">Custom API</option></select></label>
+                    <label class="field"><span>Pulsoid access token</span><input id="heart_rate_pulsoid_token_setup" type="password" autocomplete="off" placeholder="Enter token or leave blank to keep saved token"></label>
+                    <label class="field"><span>HypeRate session ID</span><input id="heart_rate_hyperate_id_setup" type="password" autocomplete="off" placeholder="Enter session ID or leave blank to keep saved ID"></label>
+                    <label class="field"><span>Custom API URL</span><input id="heart_rate_custom_api_setup" type="password" autocomplete="off" placeholder="Enter URL or leave blank to keep saved URL"></label>
+                    <div class="form-grid compact-fields">
+                        <label class="field"><span>Update every seconds</span><input id="heart_rate_interval_setup" type="number" min="1" max="60"></label>
+                        <label class="switch-row"><input id="heart_rate_osc_setup" type="checkbox"> <span>Send normalized BPM over OSC</span></label>
+                    </div>
+                    <div class="button-row wrap"><button id="heart_rate_save_setup" class="secondary" type="button">Save heart rate setup</button></div>
+                    <div id="heart_rate_setup_status" class="field-note"></div>
+                </details>
+                {% if not is_android %}
+                <details class="panel collapsible">
+                    <summary><h3>Full-Body Tracking <span class="coming-soon-tag">Coming Soon</span></h3></summary>
+                    <p class="field-note">Camera and estimation-based full-body tracking is in the works and will land in a future update.</p>
+                </details>
+                {% endif %}
+                <details class="panel collapsible">
+                    <summary><h3>VRChat Account</h3></summary>
+                    <dl class="status-list">
+                        <div><dt>Account</dt><dd id="vrcx_account_status">Unknown</dd></div>
+                    </dl>
+                    <div class="form-grid compact-fields">
+                        <label class="field"><span>Username</span><input id="vrcx_username" type="text" autocomplete="username"></label>
+                        <label class="field"><span>Password</span><input id="vrcx_password" type="password" autocomplete="current-password"></label>
+                    </div>
+                    <div class="button-row wrap">
+                        <button class="secondary" type="button" data-integration-action="vrcx_login">Log in</button>
+                        <button class="secondary" type="button" data-integration-action="vrcx_logout">Log out</button>
+                    </div>
+                    <div class="form-grid compact-fields">
+                        <label class="field"><span>2FA code</span><input id="vrcx_2fa_code" type="text" inputmode="numeric" autocomplete="one-time-code"></label>
+                        <label class="field"><span>Method</span><select id="vrcx_2fa_method"><option value="totp">Authenticator</option><option value="otp">Email</option></select></label>
+                    </div>
+                    <div class="button-row wrap">
+                        <button class="secondary" type="button" data-integration-action="vrcx_2fa">Verify 2FA</button>
+                    </div>
+                </details>
+                <details class="panel collapsible">
+                    <summary><h3>VRChat Live Instance</h3></summary>
+                    <dl class="status-list">
+                        <div><dt>Status</dt><dd id="vrchat_live_status">Unknown</dd></div>
+                        <div><dt>Source</dt><dd id="vrchat_live_source">Unknown</dd></div>
+                        <div><dt>World</dt><dd id="vrchat_live_world">No world detected</dd></div>
+                        <div><dt>Instance</dt><dd id="vrchat_live_instance">No instance detected</dd></div>
+                        <div><dt>Players</dt><dd id="vrchat_live_players">0</dd></div>
+                        <div><dt>Last event</dt><dd id="vrchat_live_last_event">None yet</dd></div>
+                        {% if not is_android %}
+                        <div><dt>Log</dt><dd id="vrchat_live_log">Waiting for VRChat output log</dd></div>
+                        <div><dt>Lines scanned</dt><dd id="vrchat_live_lines_scanned">0</dd></div>
+                        <div><dt>Last log line seen</dt><dd id="vrchat_live_last_line">None yet</dd></div>
+                        <div><dt>VRChat.exe running</dt><dd id="vrchat_live_process_running">Unknown</dd></div>
+                        {% endif %}
+                    </dl>
+                    <div class="button-row wrap">
+                        {% if not is_android %}<button class="secondary" type="button" data-integration-action="toggle_vrchat_live">Start/stop monitor</button>{% endif %}
+                        <button class="secondary" type="button" data-integration-action="refresh_vrchat_live">Refresh live data</button>
+                    </div>
+                    {% if not is_android %}
+                    <label class="field live-log-field">
+                        <span>VRChat log folder</span>
+                        <input id="vrchat_live_log_dir" type="text" placeholder="Auto-detects AppData\\LocalLow\\VRChat\\VRChat">
+                    </label>
+                    {% endif %}
+                    <label class="field">
+                        <span>Manual world or instance link</span>
+                        <input id="vrchat_live_manual_location" type="text" placeholder="Paste a VRChat world link, or wrld_xxx:instance">
+                    </label>
+                    <label class="field">
+                        <span>Chatbox text for live instance</span>
+                        <input id="vrchat_live_template" type="text" placeholder="{world} ({player_count}/{capacity}) | {instance} | {last_event}">
+                    </label>
+                    <div class="button-row wrap">
+                        <button class="secondary" type="button" data-integration-action="save_vrchat_live_settings">Save live settings</button>
+                        <button class="secondary" type="button" data-integration-action="apply_vrchat_live_manual">Use manual link</button>
+                        <button class="secondary" type="button" data-integration-action="clear_vrchat_live_manual">Clear manual link</button>
+                    </div>
+                    <div id="vrchat_live_events" class="mini-log"></div>
+                </details>
+                <details class="panel collapsible">
+                    <summary><h3>{% if is_android %}Quest Headset Battery{% else %}VR Headset and Controller Battery{% endif %}</h3></summary>
+                    <p>{% if is_android %}Reads the battery level directly from this Quest headset.{% else %}Reads headset, controller, and tracker battery levels from SteamVR.{% endif %}</p>
+                    <dl class="status-list">
+                        <div><dt>Status</dt><dd id="vr_battery_status">Disabled</dd></div>
+                        <div><dt>Detail</dt><dd id="vr_battery_detail">{% if is_android %}Turn this on to read the Quest headset battery.{% else %}Turn this on to poll SteamVR for battery levels.{% endif %}</dd></div>
+                    </dl>
+                    <div id="vr_battery_devices" class="mini-log"></div>
+                    <div class="button-row wrap">
+                        <button class="secondary" type="button" data-integration-action="toggle_vr_battery">Enable/disable</button>
+                        <button class="secondary" type="button" data-integration-action="refresh_vr_battery">Refresh now</button>
+                    </div>
+                    <div class="form-grid compact-fields">
+                        {% if not is_android %}
+                        <label class="switch-row"><input id="vr_battery_include_controllers" type="checkbox"> <span>Include controllers</span></label>
+                        <label class="switch-row"><input id="vr_battery_include_trackers" type="checkbox"> <span>Include trackers</span></label>
+                        {% endif %}
+                        <label class="field"><span>Low battery warning at %</span><input id="vr_battery_low_threshold" type="number" min="0" max="100"></label>
+                        <label class="field"><span>Poll every seconds</span><input id="vr_battery_interval" type="number" min="5" max="120"></label>
+                    </div>
+                    <div class="button-row">
+                        <button class="secondary" type="button" data-integration-action="save_vr_battery_settings">Save battery settings</button>
+                    </div>
+                </details>
+                <details class="panel collapsible">
+                    <summary><h3>{% if is_android %}Quest Media Volume{% else %}System Volume{% endif %}</h3></summary>
+                    <p>{% if is_android %}Reads the media volume level directly from this Quest headset.{% else %}Reads your PC's current output volume level.{% endif %}</p>
+                    <dl class="status-list">
+                        <div><dt>Status</dt><dd id="volume_status">Disabled</dd></div>
+                        <div><dt>Detail</dt><dd id="volume_detail">{% if is_android %}Turn this on to read the Quest media volume.{% else %}Turn this on to poll the system output volume.{% endif %}</dd></div>
+                    </dl>
+                    <div class="button-row wrap">
+                        <button class="secondary" type="button" data-integration-action="toggle_volume">Enable/disable</button>
+                        <button class="secondary" type="button" data-integration-action="refresh_volume">Refresh now</button>
+                    </div>
+                    <div class="form-grid compact-fields">
+                        <label class="field"><span>Poll every seconds</span><input id="volume_interval" type="number" min="2" max="60"></label>
+                    </div>
+                    <div class="button-row">
+                        <button class="secondary" type="button" data-integration-action="save_volume_settings">Save volume settings</button>
+                    </div>
+                </details>
+                {% if is_android %}
+                <details class="panel collapsible">
+                    <summary><h3>Quest Storage</h3></summary>
+                    <p>Reads the free storage space left on this Quest headset.</p>
+                    <dl class="status-list">
+                        <div><dt>Status</dt><dd id="device_storage_status">Disabled</dd></div>
+                        <div><dt>Detail</dt><dd id="device_storage_detail">Turn this on to read the Quest headset's free storage.</dd></div>
+                    </dl>
+                    <div class="button-row wrap">
+                        <button class="secondary" type="button" data-integration-action="toggle_device_status">Enable/disable</button>
+                        <button class="secondary" type="button" data-integration-action="refresh_device_status">Refresh now</button>
+                    </div>
+                    <div class="form-grid compact-fields">
+                        <label class="field"><span>Poll every seconds</span><input id="device_storage_interval" type="number" min="15" max="600"></label>
+                    </div>
+                    <div class="button-row">
+                        <button class="secondary" type="button" data-integration-action="save_device_status_settings">Save storage settings</button>
+                    </div>
+                </details>
+                {% endif %}
+                <details class="panel collapsible">
+                    <summary><h3>Avatar OSC Reactions</h3></summary>
+                    <p>Reads VRChat's outgoing avatar OSC data - gestures, avatar changes, and mute state. Requires OSC enabled in VRChat.</p>
+                    <dl class="status-list">
+                        <div><dt>Listener</dt><dd id="osc_reactions_status">Unknown</dd></div>
+                        <div><dt>Currently muted</dt><dd id="osc_reactions_muted">Unknown</dd></div>
+                    </dl>
+                    <label class="switch-row"><input id="avatar_change_enabled" type="checkbox"> <span>Announce when you switch avatars</span></label>
+                    <label class="field"><span>Avatar-change message</span><input id="avatar_change_message" type="text" maxlength="200"></label>
+                    <div class="button-row wrap">
+                        <button class="secondary" type="button" data-integration-action="save_avatar_change">Save avatar-change settings</button>
+                    </div>
+                    <label class="switch-row"><input id="mute_indicator_enabled" type="checkbox"> <span>Show a mute indicator in the chatbox</span></label>
+                    <label class="field"><span>Mute indicator text</span><input id="mute_indicator_text" type="text" maxlength="60"></label>
+                    <div class="button-row wrap">
+                        <button class="secondary" type="button" data-integration-action="save_mute_indicator">Save mute indicator</button>
+                    </div>
+                    <h4>Gesture Reactions</h4>
+                    <p class="field-note">Fire a temporary chatbox message when an avatar OSC parameter hits a value - e.g. GestureLeft = 4 for a wave.</p>
+                    <div class="form-grid compact-fields">
+                        <label class="field"><span>OSC address</span><input id="reaction_address_input" type="text" maxlength="120" placeholder="/avatar/parameters/GestureLeft"></label>
+                        <label class="field"><span>Trigger value</span><input id="reaction_value_input" type="text" maxlength="20" placeholder="4"></label>
+                    </div>
+                    <label class="field"><span>Message to show</span><input id="reaction_message_input" type="text" maxlength="300" placeholder="👋 Waving hello!"></label>
+                    <div class="button-row wrap">
+                        <button class="secondary" type="button" data-integration-action="add_reaction_rule">Add reaction</button>
+                    </div>
+                    <div id="reaction_rules_list" class="item-list compact-list">No reactions yet.</div>
+                </details>
+                <details class="panel collapsible">
+                    <summary><h3>Avatar Search</h3></summary>
+                    <label class="switch-row"><input id="vrcx_provider_enabled" type="checkbox"> <span>Use external avatar provider URLs</span></label>
+                    <label class="field"><span>Provider URLs</span><textarea id="vrcx_provider_urls" rows="3" placeholder="One provider search URL per line"></textarea></label>
+                    <div class="button-row wrap">
+                        <button class="secondary" type="button" data-integration-action="vrcx_avatar_provider_save">Save provider</button>
+                    </div>
+                    <div class="form-grid compact-fields">
+                        <label class="field"><span>Avatar search</span><input id="vrcx_avatar_query" type="search" placeholder="Avatar name"></label>
+                        <label class="field"><span>Source</span><select id="vrcx_avatar_source"><option value="auto">Auto</option><option value="vrchat">VRChat</option><option value="provider">Provider</option></select></label>
+                    </div>
+                    <div class="button-row wrap">
+                        <button class="secondary" type="button" data-integration-action="vrcx_avatar_search">Search avatars</button>
+                    </div>
+                    <div id="vrcx_avatar_results" class="item-list compact-list"></div>
+                </details>
+            </div>
+        </section>
+
+        <section id="section_appearance" class="section">
+            <div class="dashboard-grid two">
+                <article class="panel">
+                    <h3>Theme and Layout</h3>
+                    <div class="button-row wrap">
+                        <button id="theme_toggle" class="toggle-btn" type="button">Light theme</button>
+                        <button id="streamer_toggle" class="toggle-btn" type="button">Streamer mode</button>
+                        <button id="compact_toggle" class="toggle-btn" type="button">Compact mode</button>
+                        <button id="slim_toggle" class="toggle-btn" type="button">Slim chatbox</button>
+                    </div>
+                </article>
+                <article class="panel">
+                    <h3>Message Styling</h3>
+                    <label class="field"><span>Text effect</span><select id="appearance_effect"></select></label>
+                    <label class="field"><span>Frame</span><select id="appearance_frame"></select></label>
+                    <label class="field" id="appearance_frame_emoji_field" style="display:none;">
+                        <span>Frame emoji (put one on each end of every line)</span>
+                        <input id="appearance_frame_emoji" type="text" maxlength="8" placeholder="✨">
+                    </label>
+                    <div class="field">
+                        <span>Preview</span>
+                        <pre id="appearance_frame_preview" class="frame-preview">Select a frame to preview it here.</pre>
+                    </div>
+                    <label class="field">
+                        <span>When a message is too long for VRChat's limit</span>
+                        <select id="appearance_overflow_mode">
+                            <option value="smart">Smart truncate (cut cleanly, add "...")</option>
+                            <option value="hard">Hard cut (cut at the exact limit)</option>
+                            <option value="page">Page through it (show the whole message in turns)</option>
+                            <option value="off">Don't truncate (send as-is, VRChat may cut it)</option>
+                        </select>
+                    </label>
+                    <label class="switch-row"><input id="appearance_page_indicator" type="checkbox"> <span>Show a page counter like (1/3) when paging</span></label>
+                    <div class="button-row"><button id="save_appearance" type="button">Save appearance</button></div>
+                </article>
+            </div>
+        </section>
+
+        <section id="section_profiles" class="section">
+            <div class="section-toolbar">
+                <div>
+                    <h3>Profiles</h3>
+                    <p>Save full setups for streaming, games, music, away mode, or daily use.</p>
+                </div>
+                <button id="save_profile" type="button">Save current as profile</button>
+            </div>
+            <div class="form-grid">
+                <label class="field"><span>Profile name</span><input id="profile_name" type="text" placeholder="Streaming"></label>
+                <label class="field"><span>Description</span><input id="profile_description" type="text" placeholder="Shows music, hides private info"></label>
+            </div>
+            <div id="profile_list" class="item-list"></div>
+        </section>
+
+        <section id="section_logs" class="section">
+            <div class="section-toolbar">
+                <div>
+                    <h3>Logs and Diagnostics</h3>
+                    <p>Plain-language events here, technical details inside each entry.</p>
+                </div>
+                <div class="button-row">
+                    <button id="export_logs" class="secondary" type="button">Diagnostics report</button>
+                    <button id="clear_logs" class="danger" type="button">Clear logs</button>
+                </div>
+            </div>
+            <div class="filters">
+                <button class="filter active" data-severity="" type="button">All</button>
+                <button class="filter" data-severity="info" type="button">Info</button>
+                <button class="filter" data-severity="warning" type="button">Warnings</button>
+                <button class="filter" data-severity="error" type="button">Errors</button>
+            </div>
+            <div id="log_list" class="log-list"></div>
+        </section>
+
+        <section id="section_settings" class="section">
+            <div class="dashboard-grid two">
+                <article class="panel">
+                    <h3>OSC Connection</h3>
+                    <label class="field"><span>VRChat address</span><input id="setting_quest_ip" type="text" placeholder="127.0.0.1"></label>
+                    <label class="field"><span>VRChat port</span><input id="setting_quest_port" type="number" min="1" max="65535"></label>
+                    <label class="field"><span>Auto-send interval</span><input id="setting_osc_interval" type="number" min="1" max="3600"></label>
+                    <label class="field"><span>Manual message duration</span><input id="setting_typed_duration" type="number" min="1" max="60"></label>
+                    <div id="settings_errors" class="field-errors"></div>
+                    <div class="button-row"><button id="save_settings" type="button">Save settings</button><button id="settings_test_osc" class="secondary" type="button">Test OSC</button></div>
+                </article>
+                <article class="panel">
+                    <h3>Data and Recovery</h3>
+                    <p>Back up settings before major changes. Imports are validated before they replace anything.</p>
+                    <div class="button-row wrap">
+                        <button id="export_config" type="button">Export config</button>
+                        <label class="file-button" for="import_config">Import config</label>
+                        <input id="import_config" class="file-input-hidden" type="file" accept="application/json">
+                        <button id="reset_defaults" class="danger" type="button">Reset defaults</button>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section id="section_help" class="section">
+            <div class="dashboard-grid two">
+                <article class="panel">
+                    <h3>First-time Setup</h3>
+                    <ol class="steps">
+                        <li>Open VRChat and enable OSC in Action Menu > Options > OSC.</li>
+                        <li>Use 127.0.0.1 and port 9000 for {% if is_android %}VRChat on this Quest{% else %}desktop VRChat{% endif %}.</li>
+                        <li>Send a test message from this app.</li>
+                        <li>Save your first profile and preset.</li>
+                    </ol>
+                    <button id="help_open_setup" type="button">Open setup guide</button>
+                </article>
+                <article class="panel">
+                    <h3>Troubleshooting</h3>
+                    <div class="stack">
+                        <p><strong>Spotify offline:</strong> Check internet/DNS and reconnect Spotify when online.</p>
+                        <p><strong>No chatbox output:</strong> Confirm OSC is enabled in VRChat, then use Test OSC.</p>
+                        <p><strong>Need advanced controls:</strong> Use Integrations for router, tracker, and account tools.</p>
+                    </div>
+                </article>
+                <article class="panel">
+                    <h3>About</h3>
+                    <p><strong>Crystal Client</strong> by CrystalWare Studios</p>
+                    <p class="field-note">Started in 2025. A VRChat chatbox control center - rotating custom messages, live world/instance detection, Spotify, weather, heart rate, {% if is_android %}Quest headset battery{% else %}system stats, VR headset/controller battery{% endif %}, gesture reactions, and more, all sent to VRChat's chatbox over OSC.</p>
+                    <p><strong>Need help or want to join the community?</strong> <a href="https://discord.gg/uxPdvQkfP5" target="_blank" rel="noopener">Join the Discord</a> - <a href="https://vrchat.com/home/group/grp_7cd8b94f-90e7-4a86-8ce6-39c4d632fa8b" target="_blank" rel="noopener">Join our VRChat group</a></p>
+                </article>
+            </div>
+        </section>
+    </main>
+</div>
+
+<dialog id="setup_dialog" class="setup-dialog">
+    <form method="dialog" class="wizard">
+        <div class="wizard-head">
+            <h3>Crystal Client setup</h3>
+            <button id="setup_close" class="icon-button" value="cancel" aria-label="Close setup" type="button">x</button>
+        </div>
+        <div class="wizard-step active" data-step="0">
+            <h4>Welcome to Crystal Client</h4>
+            <p>Crystal keeps a live message in your VRChat chatbox. It can rotate your own lines and pull in your music, the time, weather, your current world, heart rate, and more.</p>
+            <p>This quick setup gets you sending in a couple of minutes. You can change anything later from the tabs on the left.</p>
+        </div>
+        <div class="wizard-step" data-step="1">
+            <h4>Step 1 — Turn on OSC in VRChat</h4>
+            <p>Crystal talks to VRChat through OSC. In VRChat, open the <strong>Action Menu → Options → OSC → Enable</strong>. If you just turned it on, restart VRChat once.</p>
+            <p>{% if is_android %}VRChat on this Quest listens on <strong>127.0.0.1</strong>, port <strong>9000</strong>. Leave these as-is for on-headset use.{% else %}Desktop VRChat listens on <strong>127.0.0.1</strong>, port <strong>9000</strong>. Leave these as-is unless you're sending to a Quest on your network.{% endif %}</p>
+            <div class="form-grid">
+                <label class="field"><span>Address</span><input id="setup_ip" type="text" value="127.0.0.1"></label>
+                <label class="field"><span>Port</span><input id="setup_port" type="number" value="9000"></label>
+            </div>
+        </div>
+        <div class="wizard-step" data-step="2">
+            <h4>Step 2 — Your first message</h4>
+            <p>Type the first line you want in your chatbox. This becomes one of your <strong>Custom Messages</strong> — the lines Crystal rotates through automatically on a timer.</p>
+            <label class="field"><span>First chatbox message</span><textarea id="setup_message" rows="3">Hello, come chat!</textarea></label>
+            <label class="field"><span>Profile name</span><input id="setup_profile" type="text" value="Default"></label>
+            <p class="field-note">A <strong>Profile</strong> is a saved copy of your whole setup, so you can switch between, say, a streaming setup and a casual one.</p>
+        </div>
+        <div class="wizard-step" data-step="3">
+            <h4>Messages, one-time sends, and presets</h4>
+            <p>These three sound similar, so here's the difference in plain terms:</p>
+            <ul class="steps">
+                <li><strong>Custom Messages</strong> (Chatbox tab) — your rotating lines. Crystal cycles these automatically. This is your everyday chatbox.</li>
+                <li><strong>Send a Message</strong> (Chatbox tab) — pushes one message right now, once, then rotation resumes. Good for a quick reply.</li>
+                <li><strong>Presets</strong> (Presets tab) — a saved bundle of a message plus its formatting and which parts are on. Use these to jump between whole looks; you don't need them to get started.</li>
+            </ul>
+        </div>
+        <div class="wizard-step" data-step="4">
+            <h4>Step 3 — Add-ons (optional)</h4>
+            <p>In the <strong>Integrations</strong> tab you can turn on extras that fill your chatbox automatically:</p>
+            <ul class="steps">
+                <li><strong>Spotify</strong> — shows your current song (setup on the next step).</li>
+                <li><strong>Weather and Time</strong> — local weather and the clock.{% if not is_android %} Desktop builds also include CPU/RAM/GPU system stats.{% endif %}</li>
+                <li><strong>Heart Rate</strong> — from Pulsoid or HypeRate.</li>
+                <li><strong>VRChat Instance</strong> — your current world, player count, and join/leave events.</li>
+                <li><strong>VR Battery</strong> — {% if is_android %}this Quest headset's battery{% else %}headset and controller battery{% endif %}.</li>
+                <li><strong>Volume</strong> — {% if is_android %}this Quest headset's media volume{% else %}your PC's current output volume{% endif %}.</li>
+            </ul>
+            <p class="field-note">Turn parts on or off any time under Chatbox → Message Parts.</p>
+        </div>
+        <div class="wizard-step" data-step="5">
+            <h4>Step 4 — Connect Spotify (optional)</h4>
+            <p>Open <strong>Integrations → Spotify Setup</strong>. Create a free app at <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com/dashboard</a>, add the Redirect URI shown there to it, paste your Client ID and Client Secret, save, then click <strong>Connect Spotify</strong> and approve playback access.</p>
+            <p class="field-note">You can skip this now and do it later — everything else works without it.</p>
+        </div>
+        <div class="wizard-step" data-step="6">
+            <h4>Step 5 — Make it yours</h4>
+            <p>Under <strong>Appearance</strong> you can add borders and text effects, choose how long messages behave (page through them so nothing gets cut off), and toggle Slim, Streamer, and Compact modes.</p>
+            <p>Under <strong>Chatbox → Message Parts</strong> you set the order of everything and can drop in spacers between lines.</p>
+        </div>
+        <div class="wizard-step" data-step="7">
+            <h4>All set</h4>
+            <p>Crystal will save this, test the OSC connection, and open the dashboard. If the test fails, make sure OSC is enabled in VRChat and use <strong>Test OSC</strong> at the top.</p>
+            <div id="setup_result" class="field-note"></div>
+        </div>
+        <div class="wizard-actions">
+            <button id="setup_back" class="secondary" type="button">Back</button>
+            <button id="setup_next" type="button">Next</button>
+            <button id="setup_finish" type="button" hidden>Finish setup</button>
+        </div>
+    </form>
+</dialog>
+
+<script src="/static/script.js"></script>
+</body>
+</html>
