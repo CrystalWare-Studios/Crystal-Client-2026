@@ -755,6 +755,7 @@ def _get_steamvr_launch_state():
         "supported": supported,
         "enabled": bool(SETTINGS.get("steamvr_auto_launch_enabled", False)),
         "registered": steamvr_launch.is_registered() if supported else False,
+        "auto_launch_confirmed": steamvr_launch.is_auto_launch_enabled() if supported else False,
     }
 
 
@@ -2362,7 +2363,10 @@ def create_app():
                 steamvr_launch.unregister()
         except Exception as e:
             reason = str(e).strip() or type(e).__name__
-            error = f"Could not reach SteamVR ({reason}). Start SteamVR once, then try again."
+            if "InterfaceNotFound" in reason or "105" in reason:
+                error = "SteamVR isn't running (or needs updating). Open SteamVR fully first, then try again."
+            else:
+                error = f"Could not reach SteamVR ({reason}). Start SteamVR once, then try again."
             enabled = SETTINGS.get("steamvr_auto_launch_enabled", False)
         else:
             SETTINGS["steamvr_auto_launch_enabled"] = enabled

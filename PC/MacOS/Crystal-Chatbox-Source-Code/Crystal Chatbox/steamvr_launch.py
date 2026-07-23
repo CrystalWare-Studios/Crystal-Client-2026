@@ -51,6 +51,10 @@ def register(auto_launch=True):
     manifest_path = _write_manifest(auto_launch)
     apps = openvr.VRApplications()
     apps.addApplicationManifest(manifest_path, False)
+    try:
+        apps.setApplicationAutoLaunch(APP_KEY, bool(auto_launch))
+    except Exception:
+        pass
     return True
 
 
@@ -60,6 +64,10 @@ def unregister():
     if not os.path.exists(MANIFEST_PATH):
         return False
     apps = openvr.VRApplications()
+    try:
+        apps.setApplicationAutoLaunch(APP_KEY, False)
+    except Exception:
+        pass
     apps.removeApplicationManifest(MANIFEST_PATH)
     return True
 
@@ -70,5 +78,15 @@ def is_registered():
     try:
         apps = openvr.VRApplications()
         return bool(apps.isApplicationInstalled(APP_KEY))
+    except Exception:
+        return False
+
+
+def is_auto_launch_enabled():
+    if not OPENVR_AVAILABLE:
+        return False
+    try:
+        apps = openvr.VRApplications()
+        return bool(apps.getApplicationAutoLaunch(APP_KEY))
     except Exception:
         return False

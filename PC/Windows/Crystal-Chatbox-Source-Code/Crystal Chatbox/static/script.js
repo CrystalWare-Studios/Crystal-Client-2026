@@ -2079,7 +2079,13 @@
         if (!steamvrLaunch.supported) {
             setText("steamvr_launch_status", "Not available (needs the packaged .exe with SteamVR installed)");
         } else if (steamvrLaunch.enabled) {
-            setText("steamvr_launch_status", steamvrLaunch.registered ? "Enabled - registered with SteamVR" : "Enabled - not yet confirmed, start SteamVR once to register");
+            if (steamvrLaunch.auto_launch_confirmed) {
+                setText("steamvr_launch_status", "Enabled - confirmed with SteamVR");
+            } else if (steamvrLaunch.registered) {
+                setText("steamvr_launch_status", "Enabled - registered, but SteamVR hasn't confirmed auto-launch yet. Try disabling and re-enabling with SteamVR running.");
+            } else {
+                setText("steamvr_launch_status", "Enabled - not yet confirmed, start SteamVR once to register");
+            }
         } else {
             setText("steamvr_launch_status", "Disabled");
         }

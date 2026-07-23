@@ -15,6 +15,9 @@ venv/
 env/
 ENV/
 
+# PyInstaller build intermediates (workpath/specpath), not the final exe
+build_tmp/
+
 # Runtime/user data - contains real credentials and personal data, never commit
 Crystal Chatbox Data/
 settings.json
