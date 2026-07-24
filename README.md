@@ -2,14 +2,14 @@
 
   <img src="Images/logo.png" alt="Crystal Client Logo" width="150px" />
 
-  # Crystal Client
+  # Crystal Chatbox
   **A VRChat companion with the most flexible OSC chatbox you've used, plus live world detection, music, weather, heart rate, VR battery, and more.**
 
   *by CrystalWare Studios — started in 2025*
 
   <br>
 
-  [**Download Crystal Client (Windows)**](https://github.com/CrystalWare-Studios/Crystal-Client/releases)
+  [**Download Crystal Chatbox (Windows)**](https://github.com/CrystalWare-Studios/Crystal-Client/releases)
 
   <br>
 
@@ -85,7 +85,7 @@ Enter your Pulsoid token (or HypeRate ID) under Integrations → Heart Rate and 
 Confirm OSC is enabled in VRChat, then use **Test OSC** in the app. If you just enabled OSC, restart VRChat once.
 
 **Does this get me banned?**
-No. Crystal Client only sends standard, allowed OSC chatbox messages — nothing exploitative.
+No. Crystal Chatbox only sends standard, allowed OSC chatbox messages — nothing exploitative.
 
 **A long message gets cut off.**
 Set the overflow mode to **Page through it** under Appearance → Message Styling; the whole message will cycle a page at a time.
