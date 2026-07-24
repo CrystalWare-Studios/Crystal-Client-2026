@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timedelta
 from packaging import version
 
-GITHUB_REPO = "CrystalWare-Studios/Crystal-Client-2026"
+GITHUB_REPO = "CrystalWare-Studios/Crystal-Chatbox-2026"
 
 
 if getattr(sys, 'frozen', False):
