@@ -48,6 +48,7 @@ import soundpad
 import session_insights
 import osc_reactions
 import global_hotkeys
+import crystalware_cloud
 
 
 IS_ANDROID = "ANDROID_ARGUMENT" in os.environ
@@ -188,6 +189,7 @@ client = make_client()
 
 def _persist_settings(backup=False, label="settings"):
     save_settings(SETTINGS, backup=backup, label=label)
+    crystalware_cloud.schedule_push()
 
 
 def _sync_runtime_from_settings():
@@ -855,6 +857,18 @@ def _check_world_preset_switch(live_state, force=False):
         return
 
 
+def _format_uptime_duration(total_seconds):
+    total_seconds = max(0, int(total_seconds or 0))
+    days, rem = divmod(total_seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes = rem // 60
+    if days > 0:
+        return f"{days}d {hours}h"
+    if hours > 0:
+        return f"{hours}h {minutes}m"
+    return f"{minutes}m"
+
+
 def _format_system_stats_line(stats=None, include_main_icon=True):
     stats = stats or system_stats.get_system_stats()
     if not stats or not stats.get("available", False):
@@ -1031,6 +1045,15 @@ def get_current_preview(advance_page=False):
     if SETTINGS.get("mute_indicator_enabled", False) and osc_reactions.is_muted():
         mute_line = SETTINGS.get("mute_indicator_text", "🔇 Muted")
 
+    uptime_line = ""
+    if SETTINGS.get("uptime_enabled", False) and crystalware_cloud.is_logged_in():
+        uptime_text = _format_uptime_duration(crystalware_cloud.get_uptime_seconds())
+        uptime_emoji = SETTINGS.get("uptime_emoji", "⏱️")
+        if SETTINGS.get("show_module_icons", True) and uptime_emoji:
+            uptime_line = f"{uptime_emoji} {uptime_text}"
+        else:
+            uptime_line = uptime_text
+
     afk_line = ""
     if SETTINGS.get("afk_enabled", False):
         timeout = SETTINGS.get("afk_timeout", 300)
@@ -1064,6 +1087,8 @@ def get_current_preview(advance_page=False):
         layout = list(layout) + ["device_storage"]
     if SETTINGS.get("mute_indicator_enabled", False) and "mute" not in layout:
         layout = list(layout) + ["mute"]
+    if SETTINGS.get("uptime_enabled", False) and "uptime" not in layout:
+        layout = list(layout) + ["uptime"]
 
     tz_setting = SETTINGS.get("timezone", "local")
     now = datetime.now() if tz_setting == "local" else datetime.now(pytz.timezone(str(tz_setting)))
@@ -1090,7 +1115,8 @@ def get_current_preview(advance_page=False):
         "volume": volume_line,
         "device_storage": device_storage_line,
         "afk": afk_line,
-        "mute": mute_line
+        "mute": mute_line,
+        "uptime": uptime_line
     }
 
     if SETTINGS.get("chatbox_template_enabled", False):
@@ -1125,6 +1151,8 @@ def get_current_preview(advance_page=False):
                 lines.append(afk_line)
             elif part == "mute" and mute_line:
                 lines.append(mute_line)
+            elif part == "uptime" and uptime_line:
+                lines.append(uptime_line)
             elif _is_spacer_key(part):
 
 
@@ -1422,6 +1450,19 @@ def _scroll_is_active():
     )
 
 
+def start_heartbeat_ticker():
+    def ticker():
+        print("[Heartbeat Ticker] Thread started")
+        interval = 60
+        while True:
+            time.sleep(interval)
+            try:
+                crystalware_cloud.send_heartbeat(interval)
+            except Exception as e:
+                log_error("Heartbeat ticker error", e)
+    threading.Thread(target=ticker, daemon=True).start()
+
+
 def start_scroll_ticker():
     def ticker():
         print("[Scroll Ticker] Thread started")
@@ -1650,6 +1691,8 @@ def create_app():
 
     start_vrc_updater()
     start_scroll_ticker()
+    start_heartbeat_ticker()
+    crystalware_cloud.send_ping_async()
 
     if SETTINGS.get("steamvr_auto_launch_enabled", False):
         try:
@@ -2373,6 +2416,65 @@ def create_app():
             _persist_settings(label="steamvr_auto_launch")
         registered = steamvr_launch.is_registered() if steamvr_launch.is_supported() else False
         return jsonify({"ok": not error, "enabled": enabled, "error": error, "registered": registered}), (200 if not error else 400)
+
+    @app.route("/account/login", methods=["GET"])
+    def account_login():
+        host = request.host.split(":")[0]
+        port = request.host.split(":")[-1] if ":" in request.host else "80"
+        return_to = f"http://{host}:{port}/account/callback"
+        return redirect(crystalware_cloud.login_url(return_to))
+
+    @app.route("/account/callback", methods=["GET"])
+    def account_callback():
+        token = request.args.get("token", "")
+        if not token:
+            return "Crystal Chatbox sign-in failed: no token received.", 400
+        crystalware_cloud.complete_login(token)
+        crystalware_cloud.schedule_push()
+        return redirect("/")
+
+    @app.route("/account/state", methods=["GET"])
+    def account_state():
+        info = crystalware_cloud.get_account_info()
+        return jsonify({
+            "ok": True,
+            "logged_in": crystalware_cloud.is_logged_in(),
+            "username": info.get("username", ""),
+            "avatar_url": info.get("avatar_url", ""),
+            "total_seconds": info.get("total_seconds", 0),
+            "leaderboard_anonymous": info.get("leaderboard_anonymous", False),
+        }), 200
+
+    @app.route("/account/leaderboard-visibility", methods=["POST"])
+    def account_leaderboard_visibility_route():
+        data = request.get_json(force=True) if request.is_json else {}
+        anonymous = bool(data.get("anonymous", False))
+        ok, error = crystalware_cloud.set_leaderboard_visibility(anonymous)
+        return jsonify({"ok": ok, "error": error, "anonymous": anonymous}), (200 if ok else 400)
+
+    @app.route("/account/logout", methods=["POST"])
+    def account_logout_route():
+        crystalware_cloud.logout()
+        return jsonify({"ok": True}), 200
+
+    @app.route("/account/sync", methods=["POST"])
+    def account_sync_route():
+        ok, error = crystalware_cloud.push_settings()
+        return jsonify({"ok": ok, "error": error}), (200 if ok else 502)
+
+    @app.route("/account/load", methods=["POST"])
+    def account_load_route():
+        blob, error = crystalware_cloud.pull_settings()
+        if blob is None:
+            return jsonify({"ok": False, "error": error}), 404
+        SETTINGS.update(blob)
+        _persist_settings(backup=True, label="account_load")
+        _sync_runtime_from_settings()
+        return jsonify({"ok": True, "settings": public_settings()}), 200
+
+    @app.route("/leaderboard", methods=["GET"])
+    def leaderboard_route():
+        return jsonify({"ok": True, "entries": crystalware_cloud.get_leaderboard()}), 200
 
     @app.route("/volume/state", methods=["GET"])
     def volume_state():
@@ -3155,7 +3257,7 @@ def create_app():
     def save_now_playing_method():
         data = request.get_json(force=True)
         method = str(data.get("now_playing_method", "") or "").strip()
-        if method not in ("lastfm", "spotify_api"):
+        if method not in ("lastfm", "spotify_api", "discord"):
             return jsonify({"ok": False, "error": "Invalid now playing method."}), 400
         SETTINGS["now_playing_method"] = method
         _persist_settings(label="now_playing_method")
@@ -3385,7 +3487,7 @@ def create_app():
             os._exit(0)
         
         threading.Thread(target=delayed_shutdown, daemon=True).start()
-        return jsonify({"ok": True, "message": "Closing Crystal Client... Please relaunch the app."}), 200
+        return jsonify({"ok": True, "message": "Closing Crystal Chatbox... Please relaunch the app."}), 200
 
     @app.route("/save_customs", methods=["POST"])
     def save_customs():
@@ -3655,7 +3757,7 @@ def create_app():
             if not code or not state or state != expected_state:
                 return render_template("error.html",
                     title="Sign-in Expired",
-                    message="Please start the connection again from Crystal Client."), 400
+                    message="Please start the connection again from Crystal Chatbox."), 400
 
             client_id = SETTINGS.get("spotify_client_id", "").strip()
             client_secret = SETTINGS.get("spotify_client_secret", "").strip()
@@ -3773,6 +3875,32 @@ def create_app():
             f.write(json.dumps(SETTINGS, indent=4, ensure_ascii=False).encode("utf-8"))
         return jsonify({"ok": True}), 200
 
+    @app.route("/save_location_zip", methods=["POST"])
+    def save_location_zip():
+        data = request.get_json(force=True) if request.is_json else {}
+        zip_code = str(data.get("zip_code", "")).strip()
+        try:
+            resolved = weather_service.resolve_us_zip(zip_code)
+        except ValueError as e:
+            return _json_error(str(e), 400)
+        except Exception as e:
+            log_error("Failed to resolve zip code", e)
+            return _json_error("Could not look up that zip code right now. Try again in a moment.", 502)
+
+        SETTINGS["weather_location"] = zip_code
+        SETTINGS["timezone"] = resolved["timezone"]
+        global TIMEZONE
+        TIMEZONE = resolved["timezone"]
+        _persist_settings(label="location_zip")
+        if show_weather:
+            weather_service.enable_weather(zip_code)
+        return jsonify({
+            "ok": True,
+            "city": resolved["city"],
+            "state": resolved["state"],
+            "timezone": resolved["timezone"],
+        }), 200
+
     @app.route("/check_updates", methods=["GET"])
     def check_updates():
         update_info = github_updater.check_for_updates(force=True)
@@ -3786,6 +3914,23 @@ def create_app():
             "current_version": current_version,
             "update_info": update_info
         }), 200
+
+    @app.route("/update/apply", methods=["POST"])
+    def update_apply():
+        update_data = github_updater.check_for_updates(force=False) or {}
+        if not update_data.get("update_available"):
+            return jsonify({"success": False, "message": "You're already on the latest version."}), 400
+        result = github_updater.apply_update(update_data.get("exe_download_url", ""))
+        if result.get("success"):
+            import threading
+
+            def delayed_restart():
+                import time
+                time.sleep(1.5)
+                os._exit(0)
+
+            threading.Thread(target=delayed_restart, daemon=True).start()
+        return jsonify(result), (200 if result.get("success") else 400)
 
     @app.route("/generate_ai_message", methods=["POST"])
     def generate_ai_message():

@@ -1,3 +1,4 @@
+import re
 import requests
 import logging
 from datetime import datetime, timedelta
@@ -5,6 +6,47 @@ import threading
 import time
 
 logger = logging.getLogger(__name__)
+
+ZIP_LOOKUP_URL = "https://api.zippopotam.us/us/{zip_code}"
+
+# State-level approximation. Good enough for a chatbox clock, but a handful of
+# counties in split-timezone states (e.g. FL panhandle, west TX, northern ID)
+# will show the wrong zone - there's no free, dependency-free way to resolve
+# that precisely from a zip code alone.
+STATE_TIMEZONES = {
+    "AL": "US/Central", "AK": "US/Alaska", "AZ": "US/Arizona", "AR": "US/Central",
+    "CA": "US/Pacific", "CO": "US/Mountain", "CT": "US/Eastern", "DE": "US/Eastern",
+    "FL": "US/Eastern", "GA": "US/Eastern", "HI": "US/Hawaii", "ID": "US/Mountain",
+    "IL": "US/Central", "IN": "US/Eastern", "IA": "US/Central", "KS": "US/Central",
+    "KY": "US/Eastern", "LA": "US/Central", "ME": "US/Eastern", "MD": "US/Eastern",
+    "MA": "US/Eastern", "MI": "US/Eastern", "MN": "US/Central", "MS": "US/Central",
+    "MO": "US/Central", "MT": "US/Mountain", "NE": "US/Central", "NV": "US/Pacific",
+    "NH": "US/Eastern", "NJ": "US/Eastern", "NM": "US/Mountain", "NY": "US/Eastern",
+    "NC": "US/Eastern", "ND": "US/Central", "OH": "US/Eastern", "OK": "US/Central",
+    "OR": "US/Pacific", "PA": "US/Eastern", "RI": "US/Eastern", "SC": "US/Eastern",
+    "SD": "US/Central", "TN": "US/Central", "TX": "US/Central", "UT": "US/Mountain",
+    "VT": "US/Eastern", "VA": "US/Eastern", "WA": "US/Pacific", "WV": "US/Eastern",
+    "WI": "US/Central", "WY": "US/Mountain", "DC": "US/Eastern",
+}
+
+
+def resolve_us_zip(zip_code):
+    zip_code = str(zip_code or "").strip()
+    if not re.match(r"^\d{5}$", zip_code):
+        raise ValueError("Enter a 5-digit US zip code.")
+    response = requests.get(ZIP_LOOKUP_URL.format(zip_code=zip_code), timeout=15)
+    if response.status_code == 404:
+        raise ValueError("That zip code wasn't found.")
+    response.raise_for_status()
+    data = response.json()
+    places = data.get("places") or []
+    if not places:
+        raise ValueError("That zip code wasn't found.")
+    place = places[0]
+    state_abbr = place.get("state abbreviation", "")
+    city = place.get("place name", "")
+    timezone = STATE_TIMEZONES.get(state_abbr, "local")
+    return {"city": city, "state": state_abbr, "timezone": timezone}
 
 
 weather_state = {

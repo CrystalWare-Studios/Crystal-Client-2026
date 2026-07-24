@@ -10,6 +10,7 @@
         profiles: "Profiles",
         logs: "Logs",
         settings: "Settings",
+        leaderboard: "Leaderboard",
         help: "Help"
     };
 
@@ -25,7 +26,8 @@
         { key: "vr_battery", label: IS_QUEST ? "Quest Battery" : "VR Battery", setting: "show_vr_battery", help: IS_QUEST ? "This Quest headset's battery." : "Headset and controller battery from SteamVR." },
         { key: "volume", label: IS_QUEST ? "Quest Volume" : "System Volume", setting: "show_volume", help: IS_QUEST ? "This Quest headset's media volume." : "Your PC's current output volume." },
         { key: "device_storage", label: "Quest Storage", setting: "show_device_storage", help: "Free storage space left on this Quest headset." },
-        { key: "afk", label: "AFK", setting: "afk_enabled", help: "Away message after inactivity." }
+        { key: "afk", label: "AFK", setting: "afk_enabled", help: "Away message after inactivity." },
+        { key: "uptime", label: "Uptime", setting: "uptime_enabled", help: "Your total time using Crystal Chatbox. Requires being logged in with Discord." }
     ].filter((part) => {
         if (IS_QUEST && ["window", "system_stats"].includes(part.key)) return false;
         if (!IS_QUEST && ["device_storage"].includes(part.key)) return false;
@@ -79,6 +81,185 @@
         _pendingEdits.delete(id);
     }
 
+    function bindAccountIndicator() {
+        const loginBtn = $("account_login_btn");
+        const chip = $("account_chip");
+        const menu = $("account_menu");
+        const syncBtn = $("account_sync_btn");
+        const loadBtn = $("account_load_btn");
+        const logoutBtn = $("account_logout_btn");
+        const infoNote = $("account_info_note");
+        const infoNoteClose = $("account_info_note_close");
+
+        if (infoNote && !localStorage.getItem("crystal.accountNoteDismissed")) {
+            infoNote.style.display = "block";
+        }
+        if (infoNoteClose) {
+            infoNoteClose.addEventListener("click", () => {
+                if (infoNote) infoNote.style.display = "none";
+                localStorage.setItem("crystal.accountNoteDismissed", "1");
+            });
+        }
+
+        const anonToggle = $("leaderboard_anonymous_toggle");
+        if (anonToggle) {
+            anonToggle.addEventListener("change", async () => {
+                const anonymous = anonToggle.checked;
+                try {
+                    await api("/account/leaderboard-visibility", { method: "POST", body: { anonymous } });
+                    toast(anonymous ? "You're now hidden on the leaderboard." : "Your name is now visible on the leaderboard.", "success");
+                    refreshLeaderboard();
+                } catch (error) {
+                    anonToggle.checked = !anonymous;
+                    toast(error.message, "error");
+                }
+            });
+        }
+
+        if (loginBtn) {
+            loginBtn.addEventListener("click", () => {
+                window.location.href = "/account/login";
+            });
+        }
+        if (chip) {
+            chip.addEventListener("click", (event) => {
+                event.stopPropagation();
+                if (menu) menu.style.display = menu.style.display === "none" ? "flex" : "none";
+            });
+        }
+        document.addEventListener("click", () => {
+            if (menu) menu.style.display = "none";
+        });
+        if (syncBtn) {
+            syncBtn.addEventListener("click", async () => {
+                if (menu) menu.style.display = "none";
+                if (!window.confirm("Save your current settings to your account? This overwrites whatever was saved there before.")) return;
+                try {
+                    await api("/account/sync", { method: "POST" });
+                    toast("Settings saved to your account.", "success");
+                } catch (error) {
+                    toast(error.message, "error");
+                }
+            });
+        }
+        if (loadBtn) {
+            loadBtn.addEventListener("click", async () => {
+                if (menu) menu.style.display = "none";
+                if (!window.confirm("This replaces the settings on this device with the ones saved to your account. Continue?")) return;
+                try {
+                    await api("/account/load", { method: "POST" });
+                    toast("Settings loaded from your account.", "success");
+                    loadState({ silent: true });
+                } catch (error) {
+                    toast(error.message, "error");
+                }
+            });
+        }
+        if (logoutBtn) {
+            logoutBtn.addEventListener("click", async () => {
+                if (menu) menu.style.display = "none";
+                try {
+                    await api("/account/logout", { method: "POST" });
+                    toast("Logged out.", "info");
+                    refreshAccountState();
+                } catch (error) {
+                    toast(error.message, "error");
+                }
+            });
+        }
+    }
+
+    async function refreshAccountState() {
+        const loginBtn = $("account_login_btn");
+        const chip = $("account_chip");
+        if (!loginBtn || !chip) return;
+        try {
+            const data = await api("/account/state");
+            const avatar = $("account_avatar");
+            const username = $("account_username");
+            const anonRow = $("leaderboard_anonymous_row");
+            const anonToggle = $("leaderboard_anonymous_toggle");
+            if (data.logged_in) {
+                loginBtn.style.display = "none";
+                chip.style.display = "flex";
+                if (username) username.textContent = data.username || "Crystal account";
+                if (avatar) {
+                    if (data.avatar_url) {
+                        avatar.src = data.avatar_url;
+                        avatar.style.display = "";
+                    } else {
+                        avatar.style.display = "none";
+                    }
+                }
+                if (anonRow) anonRow.style.display = "flex";
+                if (anonToggle && document.activeElement !== anonToggle) anonToggle.checked = !!data.leaderboard_anonymous;
+            } else {
+                loginBtn.style.display = "";
+                chip.style.display = "none";
+                const menu = $("account_menu");
+                if (menu) menu.style.display = "none";
+                if (anonRow) anonRow.style.display = "none";
+            }
+        } catch (error) {
+            // Account state is non-critical; ignore silently.
+        }
+    }
+
+    function bindUpdatePanel() {
+        onClick("update_check_btn", () => refreshUpdateState(true));
+        onClick("update_apply_btn", async () => {
+            const btn = $("update_apply_btn");
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = "Updating...";
+            }
+            try {
+                const result = await api("/update/apply", { method: "POST" });
+                toast(result.message || "Update started.", "success");
+            } catch (error) {
+                toast(error.message, "error");
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = "Update now";
+                }
+            }
+        });
+    }
+
+    async function refreshUpdateState(forceCheck = false) {
+        const currentEl = $("update_current_version");
+        const latestEl = $("update_latest_version");
+        if (!currentEl || !latestEl) return;
+        try {
+            const data = await api(forceCheck ? "/check_updates" : "/update_info");
+            const info = forceCheck ? data : data.update_info;
+            const current = forceCheck ? (data.current_version || "-") : (data.current_version || "-");
+            currentEl.textContent = current;
+            if (!info) {
+                latestEl.textContent = "Could not check.";
+                return;
+            }
+            latestEl.textContent = info.latest_version || "Unknown";
+            const applyBtn = $("update_apply_btn");
+            const manualLink = $("update_manual_link");
+            if (info.update_available) {
+                if (applyBtn) {
+                    applyBtn.style.display = info.can_apply ? "" : "none";
+                    applyBtn.disabled = false;
+                    applyBtn.textContent = "Update now";
+                }
+                if (manualLink) manualLink.style.display = info.can_apply ? "none" : "";
+                latestEl.textContent = `${info.latest_version} available`;
+            } else {
+                if (applyBtn) applyBtn.style.display = "none";
+                if (manualLink) manualLink.style.display = "none";
+                latestEl.textContent = `${info.latest_version || current} (up to date)`;
+            }
+        } catch (error) {
+            latestEl.textContent = "Could not check.";
+        }
+    }
+
     document.addEventListener("DOMContentLoaded", init);
 
     function init() {
@@ -93,10 +274,15 @@
         bindLogs();
         bindSettings();
         bindSetupWizard();
+        bindAccountIndicator();
+        bindUpdatePanel();
         showSection(state.currentSection);
         loadAppearanceOptions();
         loadState({ showSetup: true });
+        refreshAccountState();
+        refreshUpdateState();
         window.setInterval(() => loadState({ silent: true }), 7000);
+        window.setInterval(refreshAccountState, 20000);
     }
 
     async function api(path, options = {}) {
@@ -224,6 +410,40 @@
         }
         if (next === "appearance") {
             loadAppearanceOptions();
+        }
+        if (next === "leaderboard") {
+            refreshLeaderboard();
+        }
+    }
+
+    function formatLeaderboardTime(totalSeconds) {
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        if (hours <= 0) return `${minutes}m`;
+        return `${hours}h ${minutes}m`;
+    }
+
+    async function refreshLeaderboard() {
+        const list = $("leaderboard_list");
+        if (!list) return;
+        list.textContent = "Loading...";
+        try {
+            const data = await api("/leaderboard");
+            const entries = data.entries || [];
+            if (!entries.length) {
+                list.innerHTML = `<div class="empty-state">No one's on the board yet. Log in with Discord and use the app to be the first!</div>`;
+                return;
+            }
+            list.innerHTML = entries.map((entry, index) => `
+                <div class="item">
+                    <div class="item-title">
+                        <span>#${index + 1} ${entry.discord_avatar ? `<img class="account-avatar" src="${escapeHtml(entry.discord_avatar)}" alt="">` : ""} ${escapeHtml(entry.discord_username || "Unknown")}</span>
+                        <span>${formatLeaderboardTime(entry.total_seconds || 0)}</span>
+                    </div>
+                </div>
+            `).join("");
+        } catch (error) {
+            list.innerHTML = `<div class="empty-state">Could not load the leaderboard.</div>`;
         }
     }
 
@@ -463,6 +683,7 @@
             $("spotify_now_playing_method").addEventListener("change", saveNowPlayingMethod);
         }
         onClick("heart_rate_save_setup", saveHeartRateSettings);
+        onClick("location_zip_save", saveLocationZip);
         const section = $("section_integrations");
         if (section) {
             section.addEventListener("click", async (event) => {
@@ -500,6 +721,9 @@
         if ($("spotify_lastfm_group")) {
             $("spotify_lastfm_group").style.display = source === "lastfm" ? "" : "none";
         }
+        if ($("spotify_discord_group")) {
+            $("spotify_discord_group").style.display = source === "discord" ? "" : "none";
+        }
         if ($("spotify_client_setup_group")) {
             $("spotify_client_setup_group").style.display = source === "spotify_api" ? "" : "none";
         }
@@ -528,6 +752,10 @@
             status.textContent = spotify.configured
                 ? (spotify.song_text ? "Reading now-playing from Last.fm." : (spotify.last_error || "Waiting for Last.fm to show something scrobbling as now playing."))
                 : "Enter your Last.fm username above to show now-playing.";
+        } else if (source === "discord") {
+            status.textContent = spotify.configured
+                ? (spotify.song_text ? "Reading now-playing from Discord." : (spotify.last_error || "Waiting for a Spotify status to show on your Discord account."))
+                : "Log in with Discord (top-right) to show now-playing.";
         } else if (s === "connected" || spotify.song_text) {
             status.textContent = "Connected. Your current song will show in the chatbox when Music is on.";
         } else if (!settings.spotify_client_id) {
@@ -609,6 +837,21 @@
         await loadState({ silent: true });
     }
 
+    async function saveLocationZip() {
+        const zipInput = $("location_zip_input");
+        const status = $("location_zip_status");
+        const zipCode = zipInput ? zipInput.value.trim() : "";
+        try {
+            const result = await api("/save_location_zip", { method: "POST", body: { zip_code: zipCode } });
+            if (status) status.textContent = `Set to ${result.city}, ${result.state} (${result.timezone}).`;
+            toast("Weather and time zone updated.", "success");
+            await loadState({ silent: true });
+        } catch (error) {
+            if (status) status.textContent = error.message;
+            toast(error.message, "error");
+        }
+    }
+
     async function toggleAppearanceSetting(buttonId, key, value, isOn, message) {
         const settings = getSettings();
         const previous = settings[key];
@@ -642,6 +885,10 @@
         onClick("slim_toggle", () => {
             const next = !getSettings().slim_chatbox;
             toggleAppearanceSetting("slim_toggle", "slim_chatbox", next, next, "Slim chatbox updated.");
+        });
+        onClick("diagnostics_toggle", () => {
+            const next = !getSettings().diagnostics_opt_in;
+            toggleAppearanceSetting("diagnostics_toggle", "diagnostics_opt_in", next, next, next ? "Thanks - sharing anonymous diagnostics." : "Diagnostics sharing turned off.");
         });
         onClick("save_appearance", async () => {
             await saveSettingsWithToast({
@@ -784,7 +1031,7 @@
         const status = runtime.connection_status || (payload.integrations && payload.integrations.osc && payload.integrations.osc.status) || "unknown";
         const readable = status === "connected" ? "OSC connected" : status === "disconnected" ? "OSC disconnected" : "OSC not tested";
         setBadge("osc_badge", readable, status === "connected" ? "good" : status === "disconnected" ? "bad" : "neutral");
-        setText("sidebar_status", settings.setup_completed ? "Crystal Client, Developed 2025" : "Setup needed");
+        setText("sidebar_status", settings.setup_completed ? "Crystal Chatbox, Developed 2025" : "Setup needed");
         setText("current_profile_label", `Profile: ${settings.active_profile || "Default"}`);
     }
 
@@ -2094,7 +2341,7 @@
     async function toggleSteamVrAutoLaunch() {
         try {
             const result = await api("/steamvr/toggle-auto-launch", { method: "POST" });
-            toast(result.enabled ? "Crystal Client will now start with SteamVR." : "SteamVR auto-launch disabled.", "success");
+            toast(result.enabled ? "Crystal Chatbox will now start with SteamVR." : "SteamVR auto-launch disabled.", "success");
         } catch (error) {
             toast(error.message, "error");
         }
@@ -2574,6 +2821,7 @@
         setToggleState("streamer_toggle", !!settings.streamer_mode);
         setToggleState("compact_toggle", !!settings.compact_mode);
         setToggleState("slim_toggle", !!settings.slim_chatbox);
+        setToggleState("diagnostics_toggle", !!settings.diagnostics_opt_in);
     }
 
     function setToggleState(id, isOn) {
@@ -2623,7 +2871,6 @@
         const settings = getSettings();
         setValue("setup_ip", settings.quest_ip || "127.0.0.1");
         setValue("setup_port", settings.quest_port || 9000);
-        setValue("setup_profile", settings.active_profile || "Default");
         setValue("setup_message", (settings.custom_texts && settings.custom_texts[0]) || "Hello, come chat!");
         setText("setup_result", "");
         setSetupStep(0);
@@ -2656,7 +2903,6 @@
         const payload = {
             quest_ip: $("setup_ip").value.trim(),
             quest_port: Number($("setup_port").value),
-            profile: $("setup_profile").value.trim(),
             message: $("setup_message").value.trim(),
             chatbox_visible: true
         };
@@ -2709,12 +2955,13 @@
         const source = spotify && spotify.source;
         if (source === "windows_media") return "Reads whatever's playing from Windows Media - no setup needed.";
         if (source === "lastfm") return "Scroll down to Spotify/Music Integration to enter your Last.fm username.";
+        if (source === "discord") return "Log in with Discord (top-right) to read your Spotify status automatically.";
         return "Scroll down to Spotify/Music Integration to connect your own free Spotify app.";
     }
 
     function spotifyCardActions(spotify) {
         const source = spotify && spotify.source;
-        if (source === "windows_media" || source === "lastfm") return [];
+        if (source === "windows_media" || source === "lastfm" || source === "discord") return [];
         return [{ label: "Connect", action: "spotify_connect" }];
     }
 

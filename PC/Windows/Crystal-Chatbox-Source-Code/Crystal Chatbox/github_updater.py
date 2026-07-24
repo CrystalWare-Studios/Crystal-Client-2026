@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timedelta
 from packaging import version
 
-GITHUB_REPO = "DevSapph1r3/Crystal-Chatbox"
+GITHUB_REPO = "CrystalWare-Studios/Crystal-Client-2026"
 
 
 if getattr(sys, 'frozen', False):
@@ -31,16 +31,27 @@ UPDATE_CHECK_INTERVAL = 3600
 
 logger = logging.getLogger(__name__)
 
+def _version_file_path():
+    if getattr(sys, "frozen", False):
+        base = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+    else:
+        base = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base, VERSION_FILE)
+
+
 def get_current_version():
     try:
-        if os.path.exists(VERSION_FILE):
-            with open(VERSION_FILE, 'r', encoding='utf-8') as f:
+        path = _version_file_path()
+        if os.path.exists(path):
+            with open(path, 'r', encoding='utf-8') as f:
                 return f.read().strip()
     except Exception as e:
         logger.error(f"Error reading version: {e}")
     return "1.0.0"
 
 def get_github_repo():
+    if getattr(sys, "frozen", False):
+        return None
     try:
         import subprocess
         result = subprocess.run(
@@ -102,6 +113,20 @@ def check_for_updates(force=False):
 
                 update_available = latest_version != current_version and latest_version > current_version
             
+            exe_asset_url = ''
+            for asset in release.get('assets', []) or []:
+                name = str(asset.get('name', ''))
+                if name.lower().endswith('.exe') and 'windows' in name.lower():
+                    exe_asset_url = asset.get('browser_download_url', '')
+                    break
+            if not exe_asset_url:
+                for asset in release.get('assets', []) or []:
+                    if str(asset.get('name', '')).lower().endswith('.exe'):
+                        exe_asset_url = asset.get('browser_download_url', '')
+                        break
+
+            can_apply = bool(exe_asset_url) and sys.platform == 'win32' and getattr(sys, 'frozen', False)
+
             update_info = {
                 'current_version': current_version,
                 'latest_version': latest_version,
@@ -111,6 +136,8 @@ def check_for_updates(force=False):
                 'release_url': release.get('html_url', ''),
                 'published_at': release.get('published_at', ''),
                 'download_url': release.get('zipball_url', ''),
+                'exe_download_url': exe_asset_url,
+                'can_apply': can_apply,
                 'repo': repo
             }
             
@@ -145,8 +172,61 @@ def get_update_status():
     }
 
 def apply_update(download_url):
+    if sys.platform != 'win32' or not getattr(sys, 'frozen', False):
+        return {
+            'success': False,
+            'message': 'One-click update is only available in the packaged Windows app. Download the latest release manually.'
+        }
+    if not download_url:
+        return {
+            'success': False,
+            'message': 'No downloadable update was found for this platform. Download the latest release manually.'
+        }
 
-    return {
-        'success': False,
-        'message': 'For Replit, please use "git pull" to update, or re-import from GitHub'
-    }
+    import tempfile
+    import subprocess
+
+    try:
+        target_exe = sys.executable
+        temp_dir = tempfile.gettempdir()
+        new_exe_path = os.path.join(temp_dir, 'CrystalClientUpdate.exe')
+
+        response = requests.get(download_url, stream=True, timeout=60)
+        response.raise_for_status()
+        with open(new_exe_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=262144):
+                if chunk:
+                    f.write(chunk)
+
+        if os.path.getsize(new_exe_path) < 1024 * 1024:
+            return {'success': False, 'message': 'The downloaded update looked incomplete. Please try again.'}
+
+        pid = os.getpid()
+        script_path = os.path.join(temp_dir, 'crystal_client_updater.bat')
+        script = (
+            "@echo off\r\n"
+            ":wait\r\n"
+            f'tasklist /FI "PID eq {pid}" 2>NUL | find "{pid}" >NUL\r\n'
+            "if not errorlevel 1 (\r\n"
+            "    timeout /t 1 /nobreak >NUL\r\n"
+            "    goto wait\r\n"
+            ")\r\n"
+            f'copy /Y "{new_exe_path}" "{target_exe}"\r\n'
+            f'start "" "{target_exe}"\r\n'
+            f'del "{new_exe_path}"\r\n'
+            'del "%~f0"\r\n'
+        )
+        with open(script_path, 'w', encoding='utf-8') as f:
+            f.write(script)
+
+        DETACHED_PROCESS = 0x00000008
+        CREATE_NEW_PROCESS_GROUP = 0x00000200
+        subprocess.Popen(
+            ['cmd.exe', '/c', script_path],
+            creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+            close_fds=True,
+        )
+        return {'success': True, 'message': 'Update downloaded. Crystal Chatbox will close and restart in a moment.'}
+    except Exception as e:
+        logger.error(f"Error applying update: {e}")
+        return {'success': False, 'message': f'Update failed: {e}'}

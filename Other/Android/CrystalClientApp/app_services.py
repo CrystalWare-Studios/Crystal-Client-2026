@@ -284,7 +284,7 @@ def list_profiles_full():
     if not profiles:
         profiles = [{
             "name": "Default",
-            "description": "Default Crystal Client profile.",
+            "description": "Default Crystal Chatbox profile.",
             "created_at": now_iso(),
             "updated_at": now_iso(),
             "settings": capture_profile_settings(),
@@ -429,7 +429,7 @@ def search(query):
 def export_bundle(redacted=True):
     os.makedirs(EXPORT_DIR, exist_ok=True)
     payload = {
-        "app": "Crystal Client",
+        "app": "Crystal Chatbox",
         "exported_at": now_iso(),
         "schema_version": 1,
         "settings": public_settings() if redacted else deepcopy(SETTINGS),
@@ -472,7 +472,7 @@ def import_bundle(payload):
 def create_diagnostics_report(extra=None):
     os.makedirs(EXPORT_DIR, exist_ok=True)
     report = {
-        "app": "Crystal Client",
+        "app": "Crystal Chatbox",
         "created_at": now_iso(),
         "settings": public_settings(),
         "presets": list_presets(),

@@ -8,6 +8,7 @@ import time
 import requests
 
 from settings import SETTINGS, save_settings
+import crystalware_cloud
 
 IS_WINDOWS = sys.platform == "win32"
 IS_ANDROID = "ANDROID_ARGUMENT" in os.environ
@@ -51,15 +52,17 @@ tracker_lock = threading.Lock()
 
 
 def _now_playing_method():
-    if IS_ANDROID:
+    method = SETTINGS.get("now_playing_method", "lastfm" if IS_ANDROID else "spotify_api")
+    if method == "spotify_api" and IS_ANDROID:
         return "lastfm"
-    return SETTINGS.get("now_playing_method", "spotify_api")
+    return method
 
 
 def _current_source():
-    if WINDOWS_MEDIA_AVAILABLE:
+    method = _now_playing_method()
+    if method == "spotify_api" and WINDOWS_MEDIA_AVAILABLE:
         return "windows_media"
-    return "lastfm" if _now_playing_method() == "lastfm" else "spotify_api"
+    return method
 
 
 def get_spotify_state():
@@ -70,10 +73,13 @@ def get_spotify_state():
 
 
 def _configured():
-    if WINDOWS_MEDIA_AVAILABLE:
+    method = _now_playing_method()
+    if method == "spotify_api" and WINDOWS_MEDIA_AVAILABLE:
         return True
-    if _now_playing_method() == "lastfm":
+    if method == "lastfm":
         return bool(SETTINGS.get("lastfm_username", "").strip())
+    if method == "discord":
+        return crystalware_cloud.is_logged_in()
     return bool(
         SETTINGS.get("spotify_refresh_token", "").strip()
         and SETTINGS.get("spotify_client_id", "").strip()
@@ -153,18 +159,16 @@ async def _read_windows_media_session():
     }
 
 
-def _tracker_loop_windows(interval):
-    print("[Now Playing] Reading from Windows Media (any player), no setup needed.")
-    while True:
-        try:
-            result = asyncio.run(_read_windows_media_session())
-            if result is None:
-                _set_state(status="active", last_error="", song_text="", song_pos=0, song_dur=0, album_art="")
-            else:
-                _set_state(status="active", last_error="", **result)
-        except Exception as exc:
-            _set_state(status="error", last_error=str(exc).strip() or type(exc).__name__)
-        time.sleep(interval)
+def _read_windows_media_now_playing(interval):
+    try:
+        result = asyncio.run(_read_windows_media_session())
+        if result is None:
+            _set_state(status="active", last_error="", song_text="", song_pos=0, song_dur=0, album_art="")
+        else:
+            _set_state(status="active", last_error="", **result)
+    except Exception as exc:
+        _set_state(status="error", last_error=str(exc).strip() or type(exc).__name__)
+    time.sleep(interval)
 
 
 _lastfm_track_state = {"key": None, "started_at": 0.0, "duration": 0}
@@ -243,6 +247,20 @@ def _read_lastfm_now_playing():
         "song_pos": position,
         "song_dur": duration,
         "album_art": album_art,
+    }
+
+
+def _read_discord_now_playing():
+    if not crystalware_cloud.is_logged_in():
+        raise RuntimeError("Log in with Discord under the account menu to use this as your music source.")
+    data = crystalware_cloud.get_now_playing()
+    if not data or not data.get("playing"):
+        return None
+    return {
+        "song_text": f"{data.get('track', '')} - {data.get('artist', '')}".strip(" -"),
+        "song_pos": int((data.get("positionMs") or 0) // 1000),
+        "song_dur": int((data.get("durationMs") or 0) // 1000),
+        "album_art": data.get("albumArt", ""),
     }
 
 
@@ -347,9 +365,13 @@ def _tracker_loop_platform(interval):
     logged_waiting = False
 
     while True:
-        if _now_playing_method() == "lastfm":
+        method = _now_playing_method()
+        if method == "spotify_api" and WINDOWS_MEDIA_AVAILABLE:
+            _read_windows_media_now_playing(interval)
+            continue
+        if method in ("lastfm", "discord"):
             try:
-                result = _read_lastfm_now_playing()
+                result = _read_lastfm_now_playing() if method == "lastfm" else _read_discord_now_playing()
                 if result is None:
                     _set_state(status="active", last_error="", song_text="", song_pos=0, song_dur=0, album_art="")
                 else:
@@ -418,5 +440,4 @@ def start_spotify_tracker(interval=1):
             return
         tracker_started = True
 
-    target = _tracker_loop_windows if WINDOWS_MEDIA_AVAILABLE else _tracker_loop_platform
-    threading.Thread(target=target, args=(max(1, interval),), daemon=True).start()
+    threading.Thread(target=_tracker_loop_platform, args=(max(1, interval),), daemon=True).start()

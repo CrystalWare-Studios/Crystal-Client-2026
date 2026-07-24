@@ -43,7 +43,7 @@ def _sanitize_app_name_default(app_name, title):
     title_lower = (title or "").lower()
 
     if "crystal chatbox" in title_lower or "crystal client" in title_lower or "crystal chatbox" in app_lower or "crystal client" in app_lower:
-        return "Crystal Client"
+        return "Crystal Chatbox"
 
     if "youtube" in title_lower:
         video_title = title or app_name or ""

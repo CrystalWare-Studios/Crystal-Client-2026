@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Crystal Client</title>
+    <title>Crystal Chatbox</title>
     <link rel="stylesheet" href="/static/style.css">
     <script>
         window.CONFIG = {
@@ -20,7 +20,7 @@
         <div class="brand">
             <img src="/static/logo.png" alt="" class="brand-logo">
             <div>
-                <h1>Crystal Client</h1>
+                <h1>Crystal Chatbox</h1>
                 <p>by CrystalWare Studios</p>
             </div>
         </div>
@@ -38,6 +38,7 @@
             <button class="nav-item" data-section="profiles" type="button">Profiles</button>
             <button class="nav-item" data-section="logs" type="button">Logs</button>
             <button class="nav-item" data-section="settings" type="button">Settings</button>
+            <button class="nav-item" data-section="leaderboard" type="button">Leaderboard</button>
             <button class="nav-item" data-section="help" type="button">Help</button>
         </nav>
         <div class="sidebar-footer">
@@ -55,6 +56,23 @@
                 <span id="osc_badge" class="status-pill neutral">OSC unknown</span>
                 <button id="quick_test_osc" class="secondary" type="button">Test OSC</button>
                 <button id="open_setup" class="secondary" type="button">Setup</button>
+                <div id="account_indicator" class="account-indicator">
+                    <button id="account_login_btn" class="secondary account-login-btn" type="button">Login with Discord</button>
+                    <button id="account_chip" class="account-chip" type="button" style="display:none;">
+                        <img id="account_avatar" class="account-avatar" src="" alt="">
+                        <span id="account_username" class="account-username"></span>
+                    </button>
+                    <div id="account_menu" class="account-menu" style="display:none;">
+                        <button id="account_sync_btn" type="button">Save</button>
+                        <button id="account_load_btn" type="button">Load from account</button>
+                        <button id="account_logout_btn" class="danger" type="button">Log out</button>
+                    </div>
+                </div>
+            </div>
+            <div id="account_info_note" class="account-info-note" style="display:none;">
+                <p><strong>What does logging in do?</strong> Logging in is optional. When you log in with Discord, Crystal Chatbox can save a copy of your settings online, so you can log in on another device (PC or Quest) and get your setup back.</p>
+                <p><strong>Save</strong> saves your current settings to your account. <strong>Load from account</strong> replaces the settings on this device with whatever you last saved. Your settings also save automatically in the background whenever you're logged in.</p>
+                <button id="account_info_note_close" class="secondary" type="button">Got it</button>
             </div>
         </header>
 
@@ -454,16 +472,15 @@
                     <div id="spotify_windows_media_group">
                         <p>Reading directly from Windows Media - no setup needed. Works with Spotify, YouTube, or any other player.</p>
                     </div>
-                    {% if not is_android %}
                     <div id="spotify_method_switch_group">
                         <label class="field"><span>Now Playing source</span>
                             <select id="spotify_now_playing_method">
-                                <option value="spotify_api">Spotify (Client ID/Secret)</option>
+                                {% if not is_android %}<option value="spotify_api">Spotify (Client ID/Secret)</option>{% endif %}
                                 <option value="lastfm">Last.fm</option>
+                                <option value="discord">Discord</option>
                             </select>
                         </label>
                     </div>
-                    {% endif %}
                     <div id="spotify_lastfm_group">
                         <p><strong>How to link Last.fm:</strong></p>
                         <ol class="steps">
@@ -476,6 +493,10 @@
                             <button id="spotify_save_lastfm" class="secondary" type="button">Save Last.fm username</button>
                         </div>
                         <p class="field-note">This panel updates automatically once something you're scrobbling starts playing.</p>
+                    </div>
+                    <div id="spotify_discord_group">
+                        <p><strong>How to use Discord:</strong> Log in with Discord using the button top-right, then open Discord on any device and make sure Spotify is connected under <strong>User Settings → Connections</strong>. Whatever you're listening to on Spotify shows up here automatically through your Discord status - no extra setup.</p>
+                        <p class="field-note">This only works while you're in the CrystalWare Discord server with your status visible (not set to Invisible).</p>
                     </div>
                     {% if not is_android %}
                     <div id="spotify_client_setup_group">
@@ -510,6 +531,15 @@
                     </div>
                     <div class="button-row wrap"><button id="heart_rate_save_setup" class="secondary" type="button">Save heart rate setup</button></div>
                     <div id="heart_rate_setup_status" class="field-note"></div>
+                </details>
+                <details class="panel collapsible" id="location_zip_panel">
+                    <summary><h3>Weather &amp; Time Zone (Zip Code)</h3></summary>
+                    <p class="field-note">Enter a US zip code to set your weather location and clock time zone together in one step. Leave weather on "auto" instead if you'd rather it detect your location automatically.</p>
+                    <label class="field"><span>Zip code</span><input id="location_zip_input" type="text" inputmode="numeric" maxlength="5" placeholder="e.g. 90210"></label>
+                    <div class="button-row wrap">
+                        <button id="location_zip_save" class="secondary" type="button">Use this zip code</button>
+                    </div>
+                    <div id="location_zip_status" class="field-note"></div>
                 </details>
                 {% if not is_android %}
                 <details class="panel collapsible">
@@ -606,7 +636,7 @@
                 {% if not is_android %}
                 <details class="panel collapsible">
                     <summary><h3>Start with SteamVR</h3></summary>
-                    <p>Registers Crystal Client with SteamVR so it launches automatically whenever SteamVR starts. Only works with the packaged .exe (not running from source), and needs SteamVR installed.</p>
+                    <p>Registers Crystal Chatbox with SteamVR so it launches automatically whenever SteamVR starts. Only works with the packaged .exe (not running from source), and needs SteamVR installed.</p>
                     <dl class="status-list">
                         <div><dt>Status</dt><dd id="steamvr_launch_status">Disabled</dd></div>
                     </dl>
@@ -804,6 +834,31 @@
                         <button id="reset_defaults" class="danger" type="button">Reset defaults</button>
                     </div>
                 </article>
+                <article class="panel">
+                    <h3>Privacy</h3>
+                    <p>Off by default. Sharing this helps us catch crashes and see which features people actually use - never your chatbox messages or connected account details.</p>
+                    <div class="button-row wrap">
+                        <button id="diagnostics_toggle" class="toggle-btn" type="button">Share anonymous crash &amp; usage data</button>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section id="section_leaderboard" class="section">
+            <div class="dashboard-grid">
+                <article class="panel span-2">
+                    <div class="panel-head">
+                        <div>
+                            <h3>Leaderboard</h3>
+                            <p>The most active Crystal Chatbox users, ranked by total time with the app open. Log in with Discord to join the board.</p>
+                        </div>
+                    </div>
+                    <label class="switch-row" id="leaderboard_anonymous_row" style="display:none;">
+                        <input id="leaderboard_anonymous_toggle" type="checkbox">
+                        <span>Hide my name on the leaderboard (shows as "Anonymous" to other users)</span>
+                    </label>
+                    <div id="leaderboard_list" class="item-list compact-list">Loading...</div>
+                </article>
             </div>
         </section>
 
@@ -829,9 +884,20 @@
                 </article>
                 <article class="panel">
                     <h3>About</h3>
-                    <p><strong>Crystal Client</strong> by CrystalWare Studios</p>
+                    <p><strong>Crystal Chatbox</strong> by CrystalWare Studios</p>
                     <p class="field-note">Started in 2025. A VRChat chatbox control center - rotating custom messages, live world/instance detection, Spotify, weather, heart rate, {% if is_android %}Quest headset battery{% else %}system stats, VR headset/controller battery{% endif %}, gesture reactions, and more, all sent to VRChat's chatbox over OSC.</p>
                     <p><strong>Need help or want to join the community?</strong> <a href="https://discord.gg/uxPdvQkfP5" target="_blank" rel="noopener">Join the Discord</a> - <a href="https://vrchat.com/home/group/grp_7cd8b94f-90e7-4a86-8ce6-39c4d632fa8b" target="_blank" rel="noopener">Join our VRChat group</a></p>
+                    {% if not is_android %}
+                    <dl class="status-list">
+                        <div><dt>Version</dt><dd id="update_current_version">-</dd></div>
+                        <div><dt>Latest release</dt><dd id="update_latest_version">Checking...</dd></div>
+                    </dl>
+                    <div class="button-row wrap">
+                        <button id="update_check_btn" class="secondary" type="button">Check for updates</button>
+                        <button id="update_apply_btn" type="button" style="display:none;">Update now</button>
+                        <a id="update_manual_link" class="secondary" href="https://github.com/CrystalWare-Studios/Crystal-Client-2026/releases" target="_blank" rel="noopener" style="display:none;">Download manually</a>
+                    </div>
+                    {% endif %}
                 </article>
             </div>
         </section>
@@ -841,18 +907,18 @@
 <dialog id="setup_dialog" class="setup-dialog">
     <form method="dialog" class="wizard">
         <div class="wizard-head">
-            <h3>Crystal Client setup</h3>
+            <h3>Crystal Chatbox setup</h3>
             <button id="setup_close" class="icon-button" value="cancel" aria-label="Close setup" type="button">x</button>
         </div>
         <div class="wizard-step active" data-step="0">
-            <h4>Welcome to Crystal Client</h4>
-            <p>Crystal keeps a live message in your VRChat chatbox. It can rotate your own lines and pull in your music, the time, weather, your current world, heart rate, and more.</p>
-            <p>This quick setup gets you sending in a couple of minutes. You can change anything later from the tabs on the left.</p>
+            <h4>Welcome to Crystal Chatbox</h4>
+            <p>Crystal shows a live message in your VRChat chatbox — your own text, plus music, time, weather, world info, and more if you want it.</p>
+            <p>This takes about a minute. You can change anything later.</p>
         </div>
         <div class="wizard-step" data-step="1">
             <h4>Step 1 — Turn on OSC in VRChat</h4>
-            <p>Crystal talks to VRChat through OSC. In VRChat, open the <strong>Action Menu → Options → OSC → Enable</strong>. If you just turned it on, restart VRChat once.</p>
-            <p>{% if is_android %}VRChat on this Quest listens on <strong>127.0.0.1</strong>, port <strong>9000</strong>. Leave these as-is for on-headset use.{% else %}Desktop VRChat listens on <strong>127.0.0.1</strong>, port <strong>9000</strong>. Leave these as-is unless you're sending to a Quest on your network.{% endif %}</p>
+            <p>In VRChat, open <strong>Action Menu → Options → OSC → Enable</strong>. If you just turned it on, restart VRChat once.</p>
+            <p>{% if is_android %}Leave the address and port below as-is for on-headset use.{% else %}Leave these as-is unless you're sending to a Quest on your network.{% endif %}</p>
             <div class="form-grid">
                 <label class="field"><span>Address</span><input id="setup_ip" type="text" value="127.0.0.1"></label>
                 <label class="field"><span>Port</span><input id="setup_port" type="number" value="9000"></label>
@@ -860,52 +926,41 @@
         </div>
         <div class="wizard-step" data-step="2">
             <h4>Step 2 — Your first message</h4>
-            <p>Type the first line you want in your chatbox. This becomes one of your <strong>Custom Messages</strong> — the lines Crystal rotates through automatically on a timer.</p>
+            <p>Type the first line you want in your chatbox. Crystal will rotate through your messages automatically — you can add more later.</p>
             <label class="field"><span>First chatbox message</span><textarea id="setup_message" rows="3">Hello, come chat!</textarea></label>
-            <label class="field"><span>Profile name</span><input id="setup_profile" type="text" value="Default"></label>
-            <p class="field-note">A <strong>Profile</strong> is a saved copy of your whole setup, so you can switch between, say, a streaming setup and a casual one.</p>
         </div>
         <div class="wizard-step" data-step="3">
-            <h4>Messages, one-time sends, and presets</h4>
-            <p>These three sound similar, so here's the difference in plain terms:</p>
+            <h4>Two ways to send a message</h4>
             <ul class="steps">
-                <li><strong>Custom Messages</strong> (Chatbox tab) — your rotating lines. Crystal cycles these automatically. This is your everyday chatbox.</li>
-                <li><strong>Send a Message</strong> (Chatbox tab) — pushes one message right now, once, then rotation resumes. Good for a quick reply.</li>
-                <li><strong>Presets</strong> (Presets tab) — a saved bundle of a message plus its formatting and which parts are on. Use these to jump between whole looks; you don't need them to get started.</li>
+                <li><strong>Custom Messages</strong> — your everyday rotating lines. This runs automatically.</li>
+                <li><strong>Send a Message</strong> — sends one message right now, then goes back to your rotation.</li>
             </ul>
         </div>
         <div class="wizard-step" data-step="4">
             <h4>Step 3 — Add-ons (optional)</h4>
-            <p>In the <strong>Integrations</strong> tab you can turn on extras that fill your chatbox automatically:</p>
+            <p>The <strong>Integrations</strong> tab has extras you can turn on any time:</p>
             <ul class="steps">
-                <li><strong>Spotify</strong> — shows your current song (setup on the next step).</li>
-                <li><strong>Weather and Time</strong> — local weather and the clock.{% if not is_android %} Desktop builds also include CPU/RAM/GPU system stats.{% endif %}</li>
-                <li><strong>Heart Rate</strong> — from Pulsoid or HypeRate.</li>
-                <li><strong>VRChat Instance</strong> — your current world, player count, and join/leave events.</li>
-                <li><strong>VR Battery</strong> — {% if is_android %}this Quest headset's battery{% else %}headset and controller battery{% endif %}.</li>
-                <li><strong>Volume</strong> — {% if is_android %}this Quest headset's media volume{% else %}your PC's current output volume{% endif %}.</li>
+                <li><strong>Music</strong> — shows your current song.</li>
+                <li><strong>Weather and Time</strong> — local weather and the clock.</li>
+                <li><strong>Heart Rate</strong>, <strong>VRChat Instance</strong>, <strong>VR Battery</strong>, and more.</li>
             </ul>
-            <p class="field-note">Turn parts on or off any time under Chatbox → Message Parts.</p>
         </div>
         <div class="wizard-step" data-step="5">
             <h4>Step 4 — Now Playing (optional)</h4>
             {% if spotify_source == "windows_media" %}
-            <p>Nothing to set up — Crystal reads whatever's currently playing straight from Windows, for Spotify, YouTube, or any other player.</p>
-            {% elif is_android %}
-            <p>Open <strong>Integrations → Spotify/Music Integration</strong> and enter your Last.fm username (a full walkthrough is right there — connecting your player to Last.fm takes a couple minutes if you haven't already).</p>
+            <p>Nothing to set up — Crystal reads whatever's playing straight from Windows.</p>
             {% else %}
-            <p>Open <strong>Integrations → Spotify/Music Integration</strong>. Either connect Spotify directly with your own free developer app (Client ID/Secret), or use Last.fm instead — whichever is easier, both are explained right there.</p>
+            <p>Open <strong>Integrations → Music</strong> to connect Last.fm — takes about a minute.</p>
             {% endif %}
-            <p class="field-note">You can skip this now and do it later — everything else works without it.</p>
+            <p class="field-note">You can skip this and do it later.</p>
         </div>
         <div class="wizard-step" data-step="6">
             <h4>Step 5 — Make it yours</h4>
-            <p>Under <strong>Appearance</strong> you can add borders and text effects, choose how long messages behave (page through them so nothing gets cut off), and toggle Slim, Streamer, and Compact modes.</p>
-            <p>Under <strong>Chatbox → Message Parts</strong> you set the order of everything and can drop in spacers between lines.</p>
+            <p>Under <strong>Appearance</strong> you can add borders, text effects, and a few display modes. That's it for now — the rest you can explore anytime.</p>
         </div>
         <div class="wizard-step" data-step="7">
             <h4>All set</h4>
-            <p>Crystal will save this, test the OSC connection, and open the dashboard. If the test fails, make sure OSC is enabled in VRChat and use <strong>Test OSC</strong> at the top.</p>
+            <p>Crystal will save this and test the connection. If the test fails, make sure OSC is enabled in VRChat and try <strong>Test OSC</strong> at the top.</p>
             <div id="setup_result" class="field-note"></div>
         </div>
         <div class="wizard-actions">

@@ -33,7 +33,7 @@ def _write_manifest(auto_launch):
                 "auto_launch": bool(auto_launch),
                 "strings": {
                     "en_us": {
-                        "name": "Crystal Client",
+                        "name": "Crystal Chatbox",
                         "description": "VRChat OSC chatbox companion"
                     }
                 }

@@ -23,7 +23,7 @@ PROFILES_FILE = os.path.join(DATA_DIR, "profiles.json")
 
 DEFAULT_PROFILE = {
     "name": "Default",
-    "description": "Default Crystal Client profile.",
+    "description": "Default Crystal Chatbox profile.",
     "created_at": None,
     "updated_at": None,
     "settings": {

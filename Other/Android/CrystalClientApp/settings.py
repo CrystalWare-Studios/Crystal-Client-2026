@@ -70,7 +70,7 @@ DEFAULTS = {
     "spotify_update_interval": 2,
     "now_playing_method": "spotify_api",
     "lastfm_username": "",
-    "custom_texts": ["Crystal Client out now in meta store!", "Join the Discord to support us!"],
+    "custom_texts": ["Crystal Chatbox out now in meta store!", "Join the Discord to support us!"],
     "refresh_interval": 3,
     "osc_send_interval": 3,
     "dashboard_update_interval": 3,
@@ -266,6 +266,8 @@ DEFAULTS = {
     "avatar_change_message": "Just switched avatars! ✨",
     "mute_indicator_enabled": False,
     "mute_indicator_text": "🔇 Muted",
+    "uptime_enabled": False,
+    "uptime_emoji": "⏱️",
     "global_hotkeys_enabled": False,
     "global_hotkeys": [],
     "osc_reactions_port": 9001,
@@ -417,6 +419,7 @@ def migrate_settings(data):
         "afk_emoji",
         "volume_emoji",
         "device_storage_emoji",
+        "uptime_emoji",
     ):
         migrated[key] = _fix_mojibake(migrated.get(key, DEFAULTS[key]))
 
@@ -430,7 +433,7 @@ def migrate_settings(data):
     migrated["spotify_client_id"] = str(migrated.get("spotify_client_id", ""))[:255]
     migrated["spotify_client_secret"] = str(migrated.get("spotify_client_secret", ""))[:255]
     migrated["lastfm_username"] = str(migrated.get("lastfm_username", ""))[:255]
-    migrated["now_playing_method"] = migrated.get("now_playing_method") if migrated.get("now_playing_method") in ("lastfm", "spotify_api") else "spotify_api"
+    migrated["now_playing_method"] = migrated.get("now_playing_method") if migrated.get("now_playing_method") in ("lastfm", "spotify_api", "discord") else "spotify_api"
     migrated["weather_update_interval"] = _coerce_int(migrated.get("weather_update_interval"), 600, 60, 86400)
     migrated["vrchat_live_log_dir"] = str(migrated.get("vrchat_live_log_dir", ""))[:500]
     migrated["vrchat_live_manual_location"] = str(migrated.get("vrchat_live_manual_location", ""))[:500]

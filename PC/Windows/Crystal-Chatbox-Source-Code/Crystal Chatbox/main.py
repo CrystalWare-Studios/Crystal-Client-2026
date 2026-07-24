@@ -23,14 +23,19 @@ def _report_crash(exc_type, exc_value, exc_tb):
             f.write(f"\n--- Crash at {datetime.now().isoformat()} ---\n{message}\n")
     except Exception:
         path = ""
+    try:
+        import crystalware_cloud
+        crystalware_cloud.report_crash(message)
+    except Exception:
+        pass
     if sys.platform == "win32":
         try:
             import ctypes
             short = f"{exc_type.__name__}: {exc_value}"
-            detail = "Crystal Client hit an unexpected error and needs to close.\n\n" + short
+            detail = "Crystal Chatbox hit an unexpected error and needs to close.\n\n" + short
             if path:
                 detail += f"\n\nDetails saved to:\n{path}"
-            ctypes.windll.user32.MessageBoxW(0, detail, "Crystal Client - Unexpected Error", 0x10)
+            ctypes.windll.user32.MessageBoxW(0, detail, "Crystal Chatbox - Unexpected Error", 0x10)
         except Exception:
             pass
 
@@ -78,7 +83,7 @@ import argparse
 
 try:
     import setproctitle
-    setproctitle.setproctitle("Crystal Client")
+    setproctitle.setproctitle("Crystal Chatbox")
 except ImportError:
     pass
 
@@ -163,7 +168,7 @@ def start_gui(app, host="127.0.0.1", port=5000):
     print("[GUI] Launching PyWebview window...")
     api = DownloadAPI()
     window = webview.create_window(
-        title="Crystal Client",
+        title="Crystal Chatbox",
         url=f"http://{host}:{port}",
         width=1200,
         height=800,
@@ -181,7 +186,7 @@ def start_gui(app, host="127.0.0.1", port=5000):
 IS_ANDROID = "ANDROID_ARGUMENT" in os.environ
 
 def main():
-    parser = argparse.ArgumentParser(description="Launch Crystal Client Dashboard.")
+    parser = argparse.ArgumentParser(description="Launch Crystal Chatbox Dashboard.")
     parser.add_argument("--nogui", action="store_true", help="Run server only, without GUI.")
 
 
